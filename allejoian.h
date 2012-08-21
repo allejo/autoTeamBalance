@@ -30,8 +30,8 @@ Author:
 Vladimir Jimenez (allejo)
 
 Description:
-A secondary API that has been put togther based on mdskpr's, Joshua Sigona's
-and my own work.
+A secondary API that has been put togther based on mdskpr's, Joshua Sigona's,
+Murielle's, and my own work.
 
 License:
 BSD
