@@ -251,3 +251,22 @@ bool isValidPlayerID(std::string myID) //Check to see if a player ID exists on t
 
 	return false; //Player ID was not found on the server
 }
+
+bool isValidPlayerID(int myID) //Check to see if a player ID exists on the server
+{
+	bz_APIIntList *playerList = bz_newIntList(); //Get the list of all the current player IDs
+	bz_getPlayerIndexList(playerList);
+
+	for (unsigned int i = 0; i < playerList->size(); i++ )
+	{
+		if (playerList->get(i) == myID)
+		{
+        	bz_deleteIntList(playerList); //Free the memory allocated
+			return true; //The player ID inputted, matches an ID that is on the map
+		}
+	}
+
+	bz_deleteIntList(playerList); //Free the memory allocated
+
+	return false; //Player ID was not found on the server
+}

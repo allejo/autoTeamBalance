@@ -48,13 +48,15 @@ void kierra::Event(bz_EventData* eventData)
         case bz_eCaptureEvent: // A flag is captured
         {
             bz_CTFCaptureEventData_V1* ctfdata = (bz_CTFCaptureEventData_V1*)eventData;
+            
+            if (bz_getTeamCount(eRedTeam) == 0 || bz_getTeamCount(eBlueTeam) == 0) break;
 
             if (bz_getTeamCount(eRedTeam)/bz_getTeamCount(eBlueTeam) < 1.3)
             {
                 switchPlayer(ctfdata->playerCapping, "blue");
                 bz_sendTextMessage(BZ_SERVER, ctfdata->playerCapping, "You're an asshole for capping! You've been moved to the blue team.");
             }
-            else
+            else if (bz_getTeamCount(eBlueTeam)/bz_getTeamCount(eRedTeam) < 1.3)
             {
                 switchPlayer(ctfdata->playerCapping, "red");
                 bz_sendTextMessage(BZ_SERVER, ctfdata->playerCapping, "You're an asshole for capping! You've been moved to the red team.");
@@ -105,8 +107,11 @@ void kierra::Event(bz_EventData* eventData)
                         
                         if (pr->team != strongTeam)
                         {
+                            bz_freePlayerRecord(pr);
                             break;
                         }
+                        
+                        bz_freePlayerRecord(pr);
                     }
                     
                     if (strongTeam == eBlueTeam)
@@ -131,37 +136,86 @@ void kierra::Event(bz_EventData* eventData)
 
 bool kierra::SlashCommand(int playerID, bz_ApiString command, bz_ApiString message, bz_APIStringList *params)
 {
-    if (command == "switch" && bz_hasPerm(playerID, "ban"))
+    if (command == "switch")
     {
-        if (isValidPlayerID(params->get(0).c_str()) || isValidCallsign(params->get(0).c_str()))
+        if (params->size() != 1 && params->size() != 2)
         {
-            if (strcmp(params->get(1).c_str(), "rogue") ||
-                strcmp(params->get(1).c_str(), "red") ||
-                strcmp(params->get(1).c_str(), "blue") ||
-                strcmp(params->get(1).c_str(), "green") ||
-                strcmp(params->get(1).c_str(), "purple") ||
-                strcmp(params->get(1).c_str(), "observer"))
+            if (bz_hasPerm(playerID, "ban"))
+            {
+                bz_sendTextMessage(BZ_SERVER, playerID, "Syntax: /switch <player slot or callsign (optional)> rogue|red|green|blue|purple|observer");
+            }
+            else
+            {
+                bz_sendTextMessage(BZ_SERVER, playerID, "Syntax: /switch rogue|red|green|blue|purple|observer");
+            }
+            return true;
+        }    
+        else if (!bz_hasPerm(playerID, "ban") && params->size() > 1)
+        {
+            bz_sendTextMessage(BZ_SERVER, playerID, "Syntax: /switch rogue|red|green|blue|purple|observer");
+            return true;
+        }
+        
+        int myID;
+        std::string teamToSwitchTo;
+        
+        if (bz_hasPerm(playerID, "ban"))
+        {
+            if (params->size() == 2)
+            {
+                myID = atoi(std::string(params->get(0).c_str()).erase(0,1).c_str());
+                teamToSwitchTo = params->get(1).c_str();
+            }
+            else
+            {
+                myID = playerID;
+                teamToSwitchTo = params->get(0).c_str();
+            }
+        }
+        else
+        {
+            myID = playerID;
+            teamToSwitchTo = params->get(0).c_str();
+        }
+        
+        if (isValidPlayerID(myID) || isValidCallsign(params->get(0).c_str()))
+        {
+            if (strcmp(teamToSwitchTo.c_str(), "rogue") == 0 ||
+                strcmp(teamToSwitchTo.c_str(), "red")  == 0 ||
+                strcmp(teamToSwitchTo.c_str(), "blue")  == 0 ||
+                strcmp(teamToSwitchTo.c_str(), "green")  == 0 ||
+                strcmp(teamToSwitchTo.c_str(), "purple")  == 0 ||
+                strcmp(teamToSwitchTo.c_str(), "observer") == 0)
             {
                 int maxPlayersOnTeam = 0;
-                if (strcmp(params->get(1).c_str(), "rogue")) maxPlayersOnTeam = bz_getTeamPlayerLimit(eRogueTeam);
-                if (strcmp(params->get(1).c_str(), "red")) maxPlayersOnTeam = bz_getTeamPlayerLimit(eRedTeam);
-                if (strcmp(params->get(1).c_str(), "blue")) maxPlayersOnTeam = bz_getTeamPlayerLimit(eBlueTeam);
-                if (strcmp(params->get(1).c_str(), "green")) maxPlayersOnTeam = bz_getTeamPlayerLimit(eGreenTeam);
-                if (strcmp(params->get(1).c_str(), "purple")) maxPlayersOnTeam = bz_getTeamPlayerLimit(ePurpleTeam);
-                if (strcmp(params->get(1).c_str(), "observer")) maxPlayersOnTeam = bz_getTeamPlayerLimit(eObservers);
-                
+                if (strcmp(teamToSwitchTo.c_str(), "rogue") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(eRogueTeam);
+                if (strcmp(teamToSwitchTo.c_str(), "red") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(eRedTeam);
+                if (strcmp(teamToSwitchTo.c_str(), "blue") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(eBlueTeam);
+                if (strcmp(teamToSwitchTo.c_str(), "green") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(eGreenTeam);
+                if (strcmp(teamToSwitchTo.c_str(), "purple") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(ePurpleTeam);
+                if (strcmp(teamToSwitchTo.c_str(), "observer") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(eObservers);
+            
                 if (maxPlayersOnTeam > 0)
                 {
-                    switchPlayer(atoi(std::string(params->get(0).c_str()).erase(0,1).c_str()), params->get(1).c_str());
+                    if (playerID != myID)
+                    {
+                        switchPlayer(myID, teamToSwitchTo);
+                        bz_sendTextMessagef(BZ_SERVER, myID, "You've been switched to the %s team by %s", teamToSwitchTo.c_str(), bz_getPlayerByIndex(playerID)->callsign.c_str());
+                    }
+                    else
+                    {
+                        switchPlayer(playerID, teamToSwitchTo);
+                        bz_sendTextMessagef(BZ_SERVER, myID, "You've been switched to the %s team.", teamToSwitchTo.c_str());
+                    }
                 }
                 else
                 {
-                    bz_sendTextMessagef(BZ_SERVER, playerID, "The %s team does not exist on this map.", params->get(1).c_str());
+                    bz_sendTextMessagef(BZ_SERVER, playerID, "The %s team does not exist on this map.", teamToSwitchTo.c_str());
                 }
             }
             else
             {
-                bz_sendTextMessagef(BZ_SERVER, playerID, "The %s team does not exist.", params->get(1).c_str());
+                bz_sendTextMessagef(BZ_SERVER, playerID, "The %s team does not exist.", teamToSwitchTo.c_str());
             }
         }
         else
