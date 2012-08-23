@@ -126,6 +126,12 @@ void teamSwitch::Event(bz_EventData* eventData)
             double redToBlueRatio = bz_getTeamCount(eRedTeam)/double(bz_getTeamCount(eBlueTeam));
             double blueToRedRatio = bz_getTeamCount(eBlueTeam)/double(bz_getTeamCount(eRedTeam));
             
+            //Break if it's 2-1, 2-3, or 3-4
+            if (((bz_getTeamCount(eRedTeam) == 1 || bz_getTeamCount(eBlueTeam) == 1) && (bz_getTeamCount(eRedTeam) == 2 || bz_getTeamCount(eBlueTeam) == 2)) ||
+                ((bz_getTeamCount(eRedTeam) == 2 || bz_getTeamCount(eBlueTeam) == 2) && (bz_getTeamCount(eRedTeam) == 3 || bz_getTeamCount(eBlueTeam) == 3)) ||
+                ((bz_getTeamCount(eRedTeam) == 3 || bz_getTeamCount(eBlueTeam) == 3) && (bz_getTeamCount(eRedTeam) == 4 || bz_getTeamCount(eBlueTeam) == 4)))
+                break;
+            
             if ((redToBlueRatio > 1.3 || blueToRedRatio > 1.3) && !teamsUneven)
             {
                 if (redToBlueRatio > 1.3) strongTeam = eRedTeam;
@@ -133,7 +139,6 @@ void teamSwitch::Event(bz_EventData* eventData)
                 
                 teamsUneven = true;
                 timeFirstUneven = tickdata->eventTime;
-                bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Teams are uneven, please don't be dicks and even them out.");
             }
             else if (teamsUneven)
             {
@@ -142,7 +147,6 @@ void teamSwitch::Event(bz_EventData* eventData)
                     if (redToBlueRatio < 1.3)
                     {
                         teamsUneven = false;
-                        bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Thank you for evening out the teams.");
                     }
                 }
                 else
@@ -150,12 +154,11 @@ void teamSwitch::Event(bz_EventData* eventData)
                     if (blueToRedRatio < 1.3)
                     {
                         teamsUneven = false;
-                        bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Thank you for evening out the teams.");
                     }
                 }
             }
             
-            if (teamsUneven && (timeFirstUneven + 30 < bz_getCurrentTime()))
+            if (teamsUneven && (timeFirstUneven + 10 < bz_getCurrentTime()))
             {
                 bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
                 
