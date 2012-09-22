@@ -37,7 +37,7 @@ License:
 BSD
 
 Version:
-1.0
+1.1
 */
 
 #include <sstream>
@@ -84,22 +84,19 @@ void removePlayer(int playerIndex)
 
 void addPlayer(GameKeeper::Player *playerData, int index)
 {
+    void *bufStart = getDirectMessageBuffer();
+    void *buf      = playerData->packPlayerUpdate(bufStart);
 
-        void *bufStart = getDirectMessageBuffer();
-        void *buf      = playerData->packPlayerUpdate(bufStart);
-
-        if (playerData->getIndex() == index) {
-            // send all players info about player[playerIndex]
-            broadcastMessage(MsgAddPlayer, (char*)buf - (char*)bufStart, bufStart);
-        } else {
-            directMessage(index, MsgAddPlayer, (char*)buf - (char*)bufStart, bufStart);
-        }
-        int teamNum = int(playerData->player.getTeam());
-        team[teamNum].team.size++;
-        sendTeamUpdate(-1, teamNum);
-        fixTeamCount();
-
-
+    if (playerData->getIndex() == index) {
+        // send all players info about player[playerIndex]
+        broadcastMessage(MsgAddPlayer, (char*)buf - (char*)bufStart, bufStart);
+    } else {
+        directMessage(index, MsgAddPlayer, (char*)buf - (char*)bufStart, bufStart);
+    }
+    int teamNum = int(playerData->player.getTeam());
+    team[teamNum].team.size++;
+    sendTeamUpdate(-1, teamNum);
+    fixTeamCount();
 }
 
 bool switchPlayer(int index, std::string teamColor)

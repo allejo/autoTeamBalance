@@ -33,13 +33,14 @@ Description:
 Switch players during game play by bypassing the API
 
 Slash Commands:
-/switch
+/switch <player slot> <color>
+/balance
 
 License:
 BSD
 
 Version:
-1.0
+1.2
 */
 
 #include "allejoian.h"
@@ -53,66 +54,275 @@ class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
 public:
     virtual const char* Name (){return "Team Switch";}
-    virtual void Init(const char* /*commandLine*/);
+    virtual void Init(const char* commandLine);
     virtual void Cleanup(void);
 
     virtual void Event(bz_EventData *eventData);
     virtual bool SlashCommand(int playerID, bz_ApiString command, bz_ApiString message, bz_APIStringList *params);
     
+    virtual void balanceTeams(void);
+    
+    bool alwaysBalanceTeams;
+    bool balanceTeamsOnCap;
+    
     bool teamsUneven;
     double timeFirstUneven;
-    bz_eTeamType strongTeam;
+    bz_eTeamType strongTeam, teamOne, teamTwo;
+    std::string teamOneColor, teamTwoColor;
 };
 
 BZ_PLUGIN(teamSwitch);
 
-void teamSwitch::Init(const char* /*commandLine*/)
+void teamSwitch::Init(const char* commandLine)
 {
+    bz_debugMessage(1,"teamSwitch plugin loaded");
+    
+    Register(bz_eBZDBChange);
     Register(bz_eCaptureEvent);
     Register(bz_eTickEvent);
 
     bz_registerCustomSlashCommand("switch", this);
+    bz_registerCustomSlashCommand("balance", this);
+    
+    teamOne = eNoTeam;
+    teamTwo = eNoTeam;
+    
+    while (teamOne == eNoTeam || teamTwo == eNoTeam)
+    {
+        if (bz_getTeamPlayerLimit(eRedTeam) > 0 && teamOne == eNoTeam)
+        {
+            teamOne = eRedTeam;
+            teamOneColor = "red";
+            continue;
+        }
+        if (bz_getTeamPlayerLimit(eGreenTeam) > 0 && teamOne == eNoTeam)
+        {
+            teamOne = eGreenTeam;
+            teamOneColor = "green";
+            continue;
+        }
+        if (bz_getTeamPlayerLimit(eBlueTeam) > 0 && teamOne == eNoTeam)
+        {
+            teamOne = eBlueTeam;
+            teamOneColor = "blue";
+            continue;
+        }
+        if (bz_getTeamPlayerLimit(ePurpleTeam) > 0 && teamOne == eNoTeam)
+        {
+            teamOne = ePurpleTeam;
+            teamOneColor = "purple";
+            continue;
+        }
+        
+        //Figure out the other team
+        if (bz_getTeamPlayerLimit(eRedTeam) > 0 && teamOne != eRedTeam && teamTwo == eNoTeam)
+        {
+            teamTwo = eRedTeam;
+            teamTwoColor = "red";
+            continue;
+        }
+        if (bz_getTeamPlayerLimit(eGreenTeam) > 0 && teamOne != eGreenTeam && teamTwo == eNoTeam)
+        {
+            teamTwo = eGreenTeam;
+            teamTwoColor = "green";
+            continue;
+        }
+        if (bz_getTeamPlayerLimit(eBlueTeam) > 0 && teamOne != eBlueTeam && teamTwo == eNoTeam)
+        {
+            teamTwo = eBlueTeam;
+            teamTwoColor = "blue";
+            continue;
+        }
+        if (bz_getTeamPlayerLimit(ePurpleTeam) > 0 && teamOne != ePurpleTeam && teamTwo == eNoTeam)
+        {
+            teamTwo = ePurpleTeam;
+            teamTwoColor = "purple";
+            continue;
+        }
+    }
+    
+    int count = 0;
+    std::string params = commandLine;
+    std::string myParameters[2] = {"0"};
+    const char* myParam;
+    char* parameter = new char[params.size() + 1];
+    std::copy(params.begin(), params.end(), parameter);
+    parameter[params.size()] = '\0';
+
+    myParam = strtok (parameter,",");
+    
+    while (myParam != NULL)
+    {
+        myParameters[count] = myParam;
+        count++;
+        myParam = strtok (NULL, ",");
+    }
+    
+    if (strcmp(myParameters[0].c_str(), "1") == 0)
+    {
+        alwaysBalanceTeams = true;
+        bz_setBZDBBool("_alwaysBalanceTeams", true, 0, false);
+        bz_debugMessage(1," -> alwaysBalanceTeams enabled");
+    }
+    else
+    {
+        alwaysBalanceTeams = false;
+        bz_setBZDBBool("_alwaysBalanceTeams", false, 0, false);
+        bz_debugMessage(1," -> alwaysBalanceTeams disabled");
+    }
+    if (strcmp(myParameters[1].c_str(), "1") == 0)
+    {
+        
+        balanceTeamsOnCap = true;
+        bz_setBZDBBool("_balanceTeamsOnCap", true, 0, false);
+        bz_debugMessage(1," -> balanceTeamsOnCap enabled");
+    }
+    else
+    {
+        alwaysBalanceTeams = false;
+        bz_setBZDBBool("_balanceTeamsOnCap", false, 0, false);
+        bz_debugMessage(1," -> balanceTeamsOnCap disabled");
+    }
     
     teamsUneven = false;
-
-    bz_debugMessage(4,"teamSwitch plugin loaded");
 }
 
 void teamSwitch::Cleanup()
 {
     Flush();
     bz_removeCustomSlashCommand("switch");
+    bz_removeCustomSlashCommand("balance");
 
     bz_debugMessage(4,"teamSwitch plugin unloaded");
+}
+
+void teamSwitch::balanceTeams(void)
+{
+    if (bz_getTeamCount(teamOne) == 0 || bz_getTeamCount(teamTwo) == 0) return;
+    
+    //Break if it's 2-1, 2-3, or 3-4
+    if (((bz_getTeamCount(teamOne) == 1 || bz_getTeamCount(teamTwo) == 1) && (bz_getTeamCount(teamOne) == 2 || bz_getTeamCount(teamTwo) == 2)) ||
+        ((bz_getTeamCount(teamOne) == 2 || bz_getTeamCount(teamTwo) == 2) && (bz_getTeamCount(teamOne) == 3 || bz_getTeamCount(teamTwo) == 3)) ||
+        ((bz_getTeamCount(teamOne) == 3 || bz_getTeamCount(teamTwo) == 3) && (bz_getTeamCount(teamOne) == 4 || bz_getTeamCount(teamTwo) == 4)))
+        return;
+    
+    bz_eTeamType strongTeam;
+    if (bz_getTeamCount(teamOne) > bz_getTeamCount(teamTwo)) strongTeam = teamOne;
+    else strongTeam = teamTwo;
+    
+    int teamDifference = abs(bz_getTeamCount(teamOne) - bz_getTeamCount(teamTwo));
+    if (teamDifference/2 != 0) teamDifference - 1;
+    
+    int playersToMove = teamDifference/2;
+    int playerMoved = 0;
+    for (int i = 0; i < playersToMove; i++)
+    {
+        playerMoved = bz_randomPlayer(strongTeam);
+        
+        if (strongTeam == teamTwo)
+        {
+            switchPlayer(playerMoved, teamOneColor);
+            bz_sendTextMessage(playerMoved, playerMoved, "-_-__-___-___++ ###################################################################### ++____-___-__-_-");
+            bz_sendTextMessagef(playerMoved, playerMoved, "-_-__-___-___++ {{{ YOU SWITCHED TO THE %s TEAM | SEE '/HELP SWITCH' FOR MORE INFO }}} ++____-___-__-_-", bz_toupper(teamOneColor.c_str()));
+            bz_sendTextMessage(playerMoved, playerMoved, "-_-__-___-___++ ###################################################################### ++____-___-__-_-");
+        }
+        else if (strongTeam == teamOne)
+        {
+            switchPlayer(playerMoved, teamTwoColor);
+            bz_sendTextMessage(playerMoved, playerMoved, "-_-__-___-___++ ##################################################################### ++____-___-__-_-");
+            bz_sendTextMessagef(playerMoved, playerMoved, "-_-__-___-___++ {{{ YOU SWITCHED TO THE %s TEAM | SEE '/HELP SWITCH' FOR MORE INFO }}} ++____-___-__-_-", bz_toupper(teamTwoColor.c_str()));
+            bz_sendTextMessage(playerMoved, playerMoved, "-_-__-___-___++ ###################################################################### ++____-___-__-_-");
+        }
+        
+        bz_BasePlayerRecord *pr = bz_getPlayerByIndex(playerMoved);
+        pr->spawned = true;
+        bz_freePlayerRecord(pr);
+    }
+    
+    teamsUneven = false;
 }
 
 void teamSwitch::Event(bz_EventData* eventData)
 {
     switch (eventData->eventType)
     {
+        case bz_eBZDBChange:
+        {
+            bz_BZDBChangeData_V1* bzdbChange = (bz_BZDBChangeData_V1*)eventData;
+            
+            if (bzdbChange->key == "_alwaysBalanceTeams")
+            {
+                if (bzdbChange->value == "1" || bzdbChange->value == "true")
+                {
+                    alwaysBalanceTeams = true;
+                }
+                else
+                {
+                    alwaysBalanceTeams = false;
+                }
+                
+            }
+            if (bzdbChange->key == "_balanceTeamsOnCap")
+            {
+                if (bzdbChange->value == "1" || bzdbChange->value == "true")
+                {
+                    balanceTeamsOnCap = true;
+                }
+                else
+                {
+                    balanceTeamsOnCap = false;
+                }
+            }
+        }
+        break;
+        
         case bz_eCaptureEvent: // A flag is captured
         {
             bz_CTFCaptureEventData_V1* ctfdata = (bz_CTFCaptureEventData_V1*)eventData;
             
-            if (bz_getTeamCount(eRedTeam) == 0 || bz_getTeamCount(eBlueTeam) == 0) break;
-            
-            if (bz_getTeamCount(eBlueTeam)/double(bz_getTeamCount(eRedTeam)) > 1.3 || bz_getTeamCount(eRedTeam)/double(bz_getTeamCount(eBlueTeam)) > 1.3)
+            if (balanceTeamsOnCap)
             {
-                if (bz_getTeamCount(eRedTeam) > bz_getTeamCount(eBlueTeam)) strongTeam = eRedTeam;
-                else strongTeam = eBlueTeam;
+                if (bz_getTeamCount(teamOne) == 0 || bz_getTeamCount(teamTwo) == 0) break;
+            
+                if (bz_getTeamCount(teamTwo)/double(bz_getTeamCount(teamOne)) > 1.3 || bz_getTeamCount(teamOne)/double(bz_getTeamCount(teamTwo)) > 1.3)
+                {
+                    if (bz_getTeamCount(teamOne) > bz_getTeamCount(teamTwo)) strongTeam = teamOne;
+                    else strongTeam = teamTwo;
                 
-                if (strongTeam == eRedTeam)
-                {
-                    switchPlayer(ctfdata->playerCapping, "blue");
-                    bz_killPlayer(ctfdata->playerCapping, 0);
-                    bz_sendTextMessage(BZ_SERVER, ctfdata->playerCapping, "You're an asshole for capping unfairly! You've been moved to the blue team.");
+                    if (strongTeam == teamOne)
+                    {
+                        bz_BasePlayerRecord *pr = bz_getPlayerByIndex(ctfdata->playerCapping);
+                        
+                        if (pr->team == strongTeam)
+                        {
+                            switchPlayer(ctfdata->playerCapping, teamTwoColor);
+                            bz_killPlayer(ctfdata->playerCapping, 0);
+                            bz_sendTextMessage(ctfdata->playerCapping, ctfdata->playerCapping, "-_-__-___-___++ ########################################################################## ++____-___-__-_-");
+                            bz_sendTextMessagef(ctfdata->playerCapping, ctfdata->playerCapping, "-_-__-___-___++ {{{ YOU GOT SWITCHED TO THE %s TEAM | SEE '/HELP SWITCH' FOR MORE INFO }}} ++____-___-__-_-", bz_toupper(teamTwoColor.c_str()));
+                            bz_sendTextMessage(ctfdata->playerCapping, ctfdata->playerCapping, "-_-__-___-___++ ########################################################################## ++____-___-__-_-");
+                        }
+                        
+                        bz_freePlayerRecord(pr);
+                    }
+                    else
+                    {
+                        bz_BasePlayerRecord *pr = bz_getPlayerByIndex(ctfdata->playerCapping);
+                        
+                        if (pr->team == strongTeam)
+                        {
+                            switchPlayer(ctfdata->playerCapping, teamOneColor);
+                            bz_killPlayer(ctfdata->playerCapping, 0);
+                            bz_sendTextMessage(ctfdata->playerCapping, ctfdata->playerCapping, "-_-__-___-___++ ########################################################################## ++____-___-__-_-");
+                            bz_sendTextMessagef(ctfdata->playerCapping, ctfdata->playerCapping, "-_-__-___-___++ {{{ YOU GOT SWITCHED TO THE %s TEAM | SEE '/HELP SWITCH' FOR MORE INFO }}} ++____-___-__-_-", bz_toupper(teamOneColor.c_str()));
+                            bz_sendTextMessage(ctfdata->playerCapping, ctfdata->playerCapping, "-_-__-___-___++ ########################################################################## ++____-___-__-_-");
+                        }
+
+                        bz_freePlayerRecord(pr);
+                    }
                 }
-                else
-                {
-                    switchPlayer(ctfdata->playerCapping, "red");
-                    bz_killPlayer(ctfdata->playerCapping, 0);
-                    bz_sendTextMessage(BZ_SERVER, ctfdata->playerCapping, "You're an asshole for capping unfairly! You've been moved to the red team.");
-                }
+                
+                bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
+                balanceTeams();
             }
         }
         break;
@@ -121,73 +331,42 @@ void teamSwitch::Event(bz_EventData* eventData)
         {
             bz_TickEventData_V1* tickdata = (bz_TickEventData_V1*)eventData;
             
-            if (bz_getTeamCount(eRedTeam) == 0 || bz_getTeamCount(eBlueTeam) == 0) break;
-            
-            double redToBlueRatio = bz_getTeamCount(eRedTeam)/double(bz_getTeamCount(eBlueTeam));
-            double blueToRedRatio = bz_getTeamCount(eBlueTeam)/double(bz_getTeamCount(eRedTeam));
-            
-            //Break if it's 2-1, 2-3, or 3-4
-            if (((bz_getTeamCount(eRedTeam) == 1 || bz_getTeamCount(eBlueTeam) == 1) && (bz_getTeamCount(eRedTeam) == 2 || bz_getTeamCount(eBlueTeam) == 2)) ||
-                ((bz_getTeamCount(eRedTeam) == 2 || bz_getTeamCount(eBlueTeam) == 2) && (bz_getTeamCount(eRedTeam) == 3 || bz_getTeamCount(eBlueTeam) == 3)) ||
-                ((bz_getTeamCount(eRedTeam) == 3 || bz_getTeamCount(eBlueTeam) == 3) && (bz_getTeamCount(eRedTeam) == 4 || bz_getTeamCount(eBlueTeam) == 4)))
-                break;
-            
-            if ((redToBlueRatio > 1.3 || blueToRedRatio > 1.3) && !teamsUneven)
+            if (alwaysBalanceTeams)
             {
-                if (redToBlueRatio > 1.3) strongTeam = eRedTeam;
-                else strongTeam = eBlueTeam;
-                
-                teamsUneven = true;
-                timeFirstUneven = tickdata->eventTime;
-            }
-            else if (teamsUneven)
-            {
-                if (strongTeam == eRedTeam)
+                double redToBlueRatio = bz_getTeamCount(teamOne)/double(bz_getTeamCount(teamTwo));
+                double blueToRedRatio = bz_getTeamCount(teamTwo)/double(bz_getTeamCount(teamOne));
+            
+                if ((redToBlueRatio > 1.3 || blueToRedRatio > 1.3) && !teamsUneven)
                 {
-                    if (redToBlueRatio < 1.3)
+                    if (redToBlueRatio > 1.3) strongTeam = teamOne;
+                    else strongTeam = teamTwo;
+
+                    teamsUneven = true;
+                    timeFirstUneven = tickdata->eventTime;
+                }
+                else if (teamsUneven)
+                {
+                    if (strongTeam == teamOne)
                     {
-                        teamsUneven = false;
+                        if (redToBlueRatio < 1.3)
+                        {
+                            teamsUneven = false;
+                        }
+                    }
+                    else
+                    {
+                        if (blueToRedRatio < 1.3)
+                        {
+                            teamsUneven = false;
+                        }
                     }
                 }
-                else
-                {
-                    if (blueToRedRatio < 1.3)
-                    {
-                        teamsUneven = false;
-                    }
-                }
-            }
             
-            if (teamsUneven && (timeFirstUneven + 10 < bz_getCurrentTime()))
-            {
-                bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
-                
-                bz_eTeamType strongTeam;
-                if (bz_getTeamCount(eRedTeam) > bz_getTeamCount(eBlueTeam)) strongTeam = eRedTeam;
-                else strongTeam = eBlueTeam;
-                
-                int teamDifference = abs(bz_getTeamCount(eRedTeam) - bz_getTeamCount(eBlueTeam));
-                if (teamDifference/2 != 0) teamDifference - 1;
-                
-                int playersToMove = teamDifference/2;
-                int playerMoved = 0;
-                for (int i = 0; i < playersToMove; i++)
+                if (teamsUneven && (timeFirstUneven + 10 < bz_getCurrentTime()))
                 {
-                    playerMoved = bz_randomPlayer(strongTeam);
-                    
-                    if (strongTeam == eBlueTeam)
-                    {
-                        switchPlayer(playerMoved, "red");
-                        bz_sendTextMessage(BZ_SERVER, playerMoved, "You have been switched to the communist team.");
-                    }
-                    else if (strongTeam == eRedTeam)
-                    {
-                        switchPlayer(playerMoved, "blue");
-                        bz_sendTextMessage(BZ_SERVER, playerMoved, "You have been switched to the blue team.");
-                    }
+                    bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
+                    balanceTeams();
                 }
-                
-                teamsUneven = false;
             }
         }
         break;
@@ -243,8 +422,8 @@ bool teamSwitch::SlashCommand(int playerID, bz_ApiString command, bz_ApiString m
             {
                 int maxPlayersOnTeam = 0;
                 if (strcmp(teamToSwitchTo.c_str(), "rogue") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(eRogueTeam);
-                if (strcmp(teamToSwitchTo.c_str(), "red") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(eRedTeam);
-                if (strcmp(teamToSwitchTo.c_str(), "blue") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(eBlueTeam);
+                if (strcmp(teamToSwitchTo.c_str(), "red") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(teamOne);
+                if (strcmp(teamToSwitchTo.c_str(), "blue") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(teamTwo);
                 if (strcmp(teamToSwitchTo.c_str(), "green") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(eGreenTeam);
                 if (strcmp(teamToSwitchTo.c_str(), "purple") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(ePurpleTeam);
                 if (strcmp(teamToSwitchTo.c_str(), "observer") == 0) maxPlayersOnTeam = bz_getTeamPlayerLimit(eObservers);
@@ -254,12 +433,24 @@ bool teamSwitch::SlashCommand(int playerID, bz_ApiString command, bz_ApiString m
                     if (playerID != myID)
                     {
                         switchPlayer(myID, teamToSwitchTo);
-                        bz_sendTextMessagef(BZ_SERVER, myID, "You've been switched to the %s team by %s", teamToSwitchTo.c_str(), bz_getPlayerByIndex(playerID)->callsign.c_str());
+                        bz_sendTextMessage(myID, myID, "-_-__-___-___++ ################################################################################# ++____-___-__-_-");
+                        bz_sendTextMessagef(myID, myID, "-_-__-___-___++ {{{ YOU WERE SWITCHED TO THE %s TEAM BY %s | SEE '/HELP SWITCH' FOR MORE INFO }}} ++____-___-__-_-", bz_toupper(teamToSwitchTo.c_str()), bz_toupper(bz_getPlayerByIndex(playerID)->callsign.c_str()));
+                        bz_sendTextMessage(myID, myID, "-_-__-___-___++ ################################################################################# ++____-___-__-_-");
+                        
+                        bz_BasePlayerRecord *pr = bz_getPlayerByIndex(myID);
+                        pr->spawned = true;
+                        bz_freePlayerRecord(pr);
                     }
                     else
                     {
                         switchPlayer(playerID, teamToSwitchTo);
-                        bz_sendTextMessagef(BZ_SERVER, myID, "You've been switched to the %s team.", teamToSwitchTo.c_str());
+                        bz_sendTextMessage(myID, myID, "-_-__-___-___++ ###################################################################### ++____-___-__-_-");
+                        bz_sendTextMessagef(myID, myID, "-_-__-___-___++ {{{ YOU SWITCHED TO THE %s TEAM | SEE '/HELP SWITCH' FOR MORE INFO }}} ++____-___-__-_-", bz_toupper(teamToSwitchTo.c_str()));
+                        bz_sendTextMessage(myID, myID, "-_-__-___-___++ ###################################################################### ++____-___-__-_-");
+                        
+                        bz_BasePlayerRecord *pr = bz_getPlayerByIndex(playerID);
+                        pr->spawned = true;
+                        bz_freePlayerRecord(pr);
                     }
                 }
                 else
@@ -277,9 +468,15 @@ bool teamSwitch::SlashCommand(int playerID, bz_ApiString command, bz_ApiString m
             bz_sendTextMessagef(BZ_SERVER, playerID, "player \"%s\" not found", params->get(0).c_str());
         }
     }
+    else if (command == "balance" && bz_hasPerm(playerID, "switch"))
+    {
+        balanceTeams();
+        bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
+        bz_sendTextMessage(BZ_SERVER, playerID, "Teams have been balanced");
+    }
     else
     {
-        bz_sendTextMessage(BZ_SERVER, playerID, "Unknown command [switch]");
+        bz_sendTextMessagef(BZ_SERVER, playerID, "Unknown command [%s]", command.c_str());
     }
 }
 
