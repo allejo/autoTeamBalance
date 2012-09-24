@@ -319,10 +319,10 @@ void teamSwitch::Event(bz_EventData* eventData)
 
                         bz_freePlayerRecord(pr);
                     }
+                    
+                    bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
+                    balanceTeams();
                 }
-                
-                bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
-                balanceTeams();
             }
         }
         break;
