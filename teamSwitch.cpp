@@ -40,7 +40,7 @@ License:
 BSD
 
 Version:
-1.2
+1.3
 */
 
 #include "allejoian.h"
@@ -53,7 +53,7 @@ Version:
 class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
 public:
-    virtual const char* Name (){return "Team Switch";}
+    virtual const char* Name (){return "Automatic Team Balance";}
     virtual void Init(const char* commandLine);
     virtual void Cleanup(void);
 
@@ -64,10 +64,12 @@ public:
     
     bool alwaysBalanceTeams;
     bool balanceTeamsOnCap;
+	bool disableCapWithUnfairTeams;
+	int checkTeamBalanceTime;
     
     bool teamsUneven;
     double timeFirstUneven;
-    bz_eTeamType strongTeam, teamOne, teamTwo;
+    bz_eTeamType strongTeam, weakTeam, teamOne, teamTwo;
     std::string teamOneColor, teamTwoColor;
 };
 
@@ -75,8 +77,9 @@ BZ_PLUGIN(teamSwitch);
 
 void teamSwitch::Init(const char* commandLine)
 {
-    bz_debugMessage(1,"teamSwitch plugin loaded");
-    
+    bz_debugMessage(1, "Automatic Team Balance plugin loaded");
+
+    Register(bz_eAllowCTFCaptureEvent);
     Register(bz_eBZDBChange);
     Register(bz_eCaptureEvent);
     Register(bz_eTickEvent);
@@ -84,6 +87,7 @@ void teamSwitch::Init(const char* commandLine)
     bz_registerCustomSlashCommand("switch", this);
     bz_registerCustomSlashCommand("balance", this);
     
+	checkTeamBalanceTime = 30;
     teamOne = eNoTeam;
     teamTwo = eNoTeam;
     
@@ -140,10 +144,12 @@ void teamSwitch::Init(const char* commandLine)
             continue;
         }
     }
+
+    bz_debugMessagef(1, "[DEBUG] Automatic Team Balance :: Teams detected -> %s vs %s", bz_toupper(teamTwoColor.c_str()), bz_toupper(teamOneColor.c_str()));
     
     int count = 0;
     std::string params = commandLine;
-    std::string myParameters[2] = {"0"};
+    std::string myParameters[4] = {"0"};
     const char* myParam;
     char* parameter = new char[params.size() + 1];
     std::copy(params.begin(), params.end(), parameter);
@@ -158,30 +164,60 @@ void teamSwitch::Init(const char* commandLine)
         myParam = strtok (NULL, ",");
     }
     
-    if (strcmp(myParameters[0].c_str(), "1") == 0)
+    if (atoi(myParameters[0].c_str()) > 0)
     {
-        alwaysBalanceTeams = true;
-        bz_setBZDBBool("_alwaysBalanceTeams", true, 0, false);
-        bz_debugMessage(1," -> alwaysBalanceTeams enabled");
+        checkTeamBalanceTime = atoi(myParameters[0].c_str());
+        bz_setBZDBInt("_atbBalanceDelay", checkTeamBalanceTime, 0, false);
+        bz_debugMessagef(1, "[DEBUG] Automatic Team Balance :: Balance delay set to %i seconds.", checkTeamBalanceTime);
     }
     else
     {
-        alwaysBalanceTeams = false;
-        bz_setBZDBBool("_alwaysBalanceTeams", false, 0, false);
-        bz_debugMessage(1," -> alwaysBalanceTeams disabled");
+        checkTeamBalanceTime = 30;
+        bz_setBZDBInt("_atbBalanceDelay", checkTeamBalanceTime, 0, false);
+        bz_debugMessage(1, "[DEBUG] Automatic Team Balance :: Balance delay automatically set to 30 seconds.");
     }
+    
     if (strcmp(myParameters[1].c_str(), "1") == 0)
     {
-        
-        balanceTeamsOnCap = true;
-        bz_setBZDBBool("_balanceTeamsOnCap", true, 0, false);
-        bz_debugMessage(1," -> balanceTeamsOnCap enabled");
+        alwaysBalanceTeams = true;
+        bz_setBZDBBool("_atbAlwaysBalanceTeams", true, 0, false);
+        bz_debugMessagef(1, "[DEBUG] Automatic Team Balance :: Teams will be balanced automatically after %i seconds of being unfair.", checkTeamBalanceTime);
     }
     else
     {
         alwaysBalanceTeams = false;
-        bz_setBZDBBool("_balanceTeamsOnCap", false, 0, false);
-        bz_debugMessage(1," -> balanceTeamsOnCap disabled");
+        bz_setBZDBBool("_atbAlwaysBalanceTeams", false, 0, false);
+    }
+	
+    if (strcmp(myParameters[2].c_str(), "1") == 0)
+    {
+        balanceTeamsOnCap = true;
+        bz_setBZDBBool("_atbBalanceTeamsOnCap", true, 0, false);
+        bz_debugMessage(1, "[DEBUG] Automatic Team Balance :: Teams will be automatically balanced after an unfair capture.");
+    }
+    else
+    {
+        balanceTeamsOnCap = false;
+        bz_setBZDBBool("_atbBalanceTeamsOnCap", false, 0, false);
+    }
+	
+    if (strcmp(myParameters[3].c_str(), "1") == 0)
+    {   
+        disableCapWithUnfairTeams = true;
+        bz_setBZDBBool("_atbDisableCapWithUnfairTeams", true, 0, false);
+        bz_debugMessage(1, "[DEBUG] Automatic Team Balance :: Unfair team captures have been disabled and will cause an automatic balance.");
+		
+		if (strcmp(myParameters[2].c_str(), "1") == 0)
+		{
+            balanceTeamsOnCap = false;
+            bz_setBZDBBool("_atbBalanceTeamsOnCap", false, 0, false);
+			bz_debugMessage(1, "[DEBUG] Automatic Team Balance :: _atbBalanceTeamsOnCap has been turned off.");
+		}
+    }
+    else
+    {
+        disableCapWithUnfairTeams = false;
+        bz_setBZDBBool("_atbDisableCapWithUnfairTeams", false, 0, false);
     }
     
     teamsUneven = false;
@@ -246,11 +282,77 @@ void teamSwitch::Event(bz_EventData* eventData)
 {
     switch (eventData->eventType)
     {
+        case bz_eAllowCTFCaptureEvent:
+        {
+            bz_AllowCTFCaptureEventData_V1* allowctfdata = (bz_AllowCTFCaptureEventData_V1*)eventData;
+            
+            if (disableCapWithUnfairTeams)
+            {
+                if (bz_getTeamCount(teamOne) == 0 || bz_getTeamCount(teamTwo) == 0) break;
+                
+                if (bz_getTeamCount(teamOne) > bz_getTeamCount(teamTwo)) {strongTeam = teamOne; weakTeam = teamTwo;}
+                else {strongTeam = teamTwo; weakTeam = teamOne;}
+                int bonusPoints = 8 * (bz_getTeamCount(weakTeam) - bz_getTeamCount(strongTeam)) + 3 * bz_getTeamCount(weakTeam);
+                
+                if (bonusPoints < 0)
+                {
+                    if (strongTeam == teamOne)
+                    {
+                        bz_BasePlayerRecord *pr = bz_getPlayerByIndex(allowctfdata->playerCapping);
+                        
+                        if (pr->team == strongTeam)
+                        {
+                            allowctfdata->allow = false;
+                            switchPlayer(allowctfdata->playerCapping, teamTwoColor);
+                            float pos[3] = {0, 0, 0};
+                            
+                            if (bz_flagPlayer(0) == allowctfdata->playerCapping)
+                                bz_moveFlag(0, pos);
+                            else if (bz_flagPlayer(1) == allowctfdata->playerCapping)
+                                bz_moveFlag(1, pos);
+                            
+                            bz_sendTextMessage(allowctfdata->playerCapping, allowctfdata->playerCapping, "-_-__-___-___++ ########################################################################## ++____-___-__-_-");
+                            bz_sendTextMessagef(allowctfdata->playerCapping, allowctfdata->playerCapping, "-_-__-___-___++ {{{ YOU GOT SWITCHED TO THE %s TEAM | SEE '/HELP SWITCH' FOR MORE INFO }}} ++____-___-__-_-", bz_toupper(teamTwoColor.c_str()));
+                            bz_sendTextMessage(allowctfdata->playerCapping, allowctfdata->playerCapping, "-_-__-___-___++ ########################################################################## ++____-___-__-_-");
+                        }
+                        
+                        bz_freePlayerRecord(pr);
+                    }
+                    else
+                    {
+                        bz_BasePlayerRecord *pr = bz_getPlayerByIndex(allowctfdata->playerCapping);
+                        
+                        if (pr->team == strongTeam)
+                        {
+                            allowctfdata->allow = false;
+                            switchPlayer(allowctfdata->playerCapping, teamOneColor);
+                            float pos[3] = {0, 0, 0};
+                            
+                            if (bz_flagPlayer(0) == allowctfdata->playerCapping)
+                                bz_moveFlag(0, pos);
+                            else if (bz_flagPlayer(1) == allowctfdata->playerCapping)
+                                bz_moveFlag(1, pos);
+                            
+                            bz_sendTextMessage(allowctfdata->playerCapping, allowctfdata->playerCapping, "-_-__-___-___++ ########################################################################## ++____-___-__-_-");
+                            bz_sendTextMessagef(allowctfdata->playerCapping, allowctfdata->playerCapping, "-_-__-___-___++ {{{ YOU GOT SWITCHED TO THE %s TEAM | SEE '/HELP SWITCH' FOR MORE INFO }}} ++____-___-__-_-", bz_toupper(teamOneColor.c_str()));
+                            bz_sendTextMessage(allowctfdata->playerCapping, allowctfdata->playerCapping, "-_-__-___-___++ ########################################################################## ++____-___-__-_-");
+                        }
+
+                        bz_freePlayerRecord(pr);
+                    }
+                    
+                    bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
+                    balanceTeams();
+                }
+            }
+        }
+        break;
+        
         case bz_eBZDBChange:
         {
             bz_BZDBChangeData_V1* bzdbChange = (bz_BZDBChangeData_V1*)eventData;
             
-            if (bzdbChange->key == "_alwaysBalanceTeams")
+            if (bzdbChange->key == "_atbAlwaysBalanceTeams")
             {
                 if (bzdbChange->value == "1" || bzdbChange->value == "true")
                 {
@@ -260,17 +362,43 @@ void teamSwitch::Event(bz_EventData* eventData)
                 {
                     alwaysBalanceTeams = false;
                 }
-                
             }
-            if (bzdbChange->key == "_balanceTeamsOnCap")
+            
+            if (bzdbChange->key == "_atbBalanceTeamsOnCap")
             {
                 if (bzdbChange->value == "1" || bzdbChange->value == "true")
                 {
                     balanceTeamsOnCap = true;
+                    disableCapWithUnfairTeams = false;
                 }
                 else
                 {
                     balanceTeamsOnCap = false;
+                }
+            }
+            
+            if (bzdbChange->key == "_atbDisableCapWithUnfairTeams")
+            {
+                if (bzdbChange->value == "1" || bzdbChange->value == "true")
+                {
+                    disableCapWithUnfairTeams = true;
+                    balanceTeamsOnCap = false;
+                }
+                else
+                {
+                    disableCapWithUnfairTeams = false;
+                }
+            }
+            
+            if (bzdbChange->key == "_atbBalanceDelay")
+            {
+                if (atoi(bzdbChange->value.c_str()) > 0)
+                {
+                    checkTeamBalanceTime = atoi(bzdbChange->value.c_str());
+                }
+                else
+                {
+                    checkTeamBalanceTime = 30;
                 }
             }
         }
@@ -283,12 +411,13 @@ void teamSwitch::Event(bz_EventData* eventData)
             if (balanceTeamsOnCap)
             {
                 if (bz_getTeamCount(teamOne) == 0 || bz_getTeamCount(teamTwo) == 0) break;
-            
-                if (bz_getTeamCount(teamTwo)/double(bz_getTeamCount(teamOne)) > 1.3 || bz_getTeamCount(teamOne)/double(bz_getTeamCount(teamTwo)) > 1.3)
-                {
-                    if (bz_getTeamCount(teamOne) > bz_getTeamCount(teamTwo)) strongTeam = teamOne;
-                    else strongTeam = teamTwo;
                 
+                if (bz_getTeamCount(teamOne) > bz_getTeamCount(teamTwo)) {strongTeam = teamOne; weakTeam = teamTwo;}
+                else {strongTeam = teamTwo; weakTeam = teamOne;}
+                int bonusPoints = 8 * (bz_getTeamCount(weakTeam) - bz_getTeamCount(strongTeam)) + 3 * bz_getTeamCount(weakTeam);
+                
+                if (bonusPoints < 0)
+                {
                     if (strongTeam == teamOne)
                     {
                         bz_BasePlayerRecord *pr = bz_getPlayerByIndex(ctfdata->playerCapping);
@@ -333,36 +462,24 @@ void teamSwitch::Event(bz_EventData* eventData)
             
             if (alwaysBalanceTeams)
             {
-                double redToBlueRatio = bz_getTeamCount(teamOne)/double(bz_getTeamCount(teamTwo));
-                double blueToRedRatio = bz_getTeamCount(teamTwo)/double(bz_getTeamCount(teamOne));
-            
-                if ((redToBlueRatio > 1.3 || blueToRedRatio > 1.3) && !teamsUneven)
+                if (bz_getTeamCount(teamOne) > bz_getTeamCount(teamTwo)) {strongTeam = teamOne; weakTeam = teamTwo;}
+                else {strongTeam = teamTwo; weakTeam = teamOne;}
+                int bonusPoints = 8 * (bz_getTeamCount(weakTeam) - bz_getTeamCount(strongTeam)) + 3 * bz_getTeamCount(weakTeam);
+                
+                if (bonusPoints < 0 && !teamsUneven)
                 {
-                    if (redToBlueRatio > 1.3) strongTeam = teamOne;
-                    else strongTeam = teamTwo;
-
                     teamsUneven = true;
                     timeFirstUneven = tickdata->eventTime;
                 }
                 else if (teamsUneven)
                 {
-                    if (strongTeam == teamOne)
+                    if (bonusPoints < 0)
                     {
-                        if (redToBlueRatio < 1.3)
-                        {
-                            teamsUneven = false;
-                        }
-                    }
-                    else
-                    {
-                        if (blueToRedRatio < 1.3)
-                        {
-                            teamsUneven = false;
-                        }
+                        teamsUneven = false;
                     }
                 }
             
-                if (teamsUneven && (timeFirstUneven + 10 < bz_getCurrentTime()))
+                if (teamsUneven && (timeFirstUneven + checkTeamBalanceTime < bz_getCurrentTime()))
                 {
                     bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
                     balanceTeams();
