@@ -1,3 +1,6 @@
+## 1.4.1
+ * Fixed bug where 3-2 caps caused endless loop
+
 ## 1.4
  * Removed allejoian.h
  * Code clean up

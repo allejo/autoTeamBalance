@@ -41,7 +41,7 @@ License:
 BSD
 
 Version:
-1.4
+1.4.1
 
 Thanks to:
 Murielle
@@ -228,6 +228,7 @@ public:
     virtual bool SlashCommand(int playerID, bz_ApiString command, bz_ApiString message, bz_APIStringList *params);
 
     virtual void balanceTeams(void);
+    virtual bool playerCountLow(void);
 
     bool alwaysBalanceTeams;
     bool balanceTeamsOnCap;
@@ -401,12 +402,7 @@ void teamSwitch::Cleanup()
 
 void teamSwitch::balanceTeams(void)
 {
-    if (bz_getTeamCount(teamOne) == 0 || bz_getTeamCount(teamTwo) == 0) return;
-
-    //Break if it's 2-1, 2-3, or 3-4
-    if (((bz_getTeamCount(teamOne) == 1 || bz_getTeamCount(teamTwo) == 1) && (bz_getTeamCount(teamOne) == 2 || bz_getTeamCount(teamTwo) == 2)) ||
-        ((bz_getTeamCount(teamOne) == 2 || bz_getTeamCount(teamTwo) == 2) && (bz_getTeamCount(teamOne) == 3 || bz_getTeamCount(teamTwo) == 3)) ||
-        ((bz_getTeamCount(teamOne) == 3 || bz_getTeamCount(teamTwo) == 3) && (bz_getTeamCount(teamOne) == 4 || bz_getTeamCount(teamTwo) == 4)))
+    if (playerCountLow())
         return;
 
     bz_eTeamType strongTeam;
@@ -445,6 +441,19 @@ void teamSwitch::balanceTeams(void)
     teamsUneven = false;
 }
 
+bool teamSwitch::playerCountLow(void)
+{
+    if (bz_getTeamCount(teamOne) == 0 || bz_getTeamCount(teamTwo) == 0) return true;
+
+    //Break if it's 2-1, 2-3, or 3-4
+    if (((bz_getTeamCount(teamOne) == 1 || bz_getTeamCount(teamTwo) == 1) && (bz_getTeamCount(teamOne) == 2 || bz_getTeamCount(teamTwo) == 2)) ||
+        ((bz_getTeamCount(teamOne) == 2 || bz_getTeamCount(teamTwo) == 2) && (bz_getTeamCount(teamOne) == 3 || bz_getTeamCount(teamTwo) == 3)) ||
+        ((bz_getTeamCount(teamOne) == 3 || bz_getTeamCount(teamTwo) == 3) && (bz_getTeamCount(teamOne) == 4 || bz_getTeamCount(teamTwo) == 4)))
+        return true;
+
+    return false;
+}
+
 void teamSwitch::Event(bz_EventData* eventData)
 {
     switch (eventData->eventType)
@@ -455,7 +464,8 @@ void teamSwitch::Event(bz_EventData* eventData)
 
             if (disableCapWithUnfairTeams)
             {
-                if (bz_getTeamCount(teamOne) == 0 || bz_getTeamCount(teamTwo) == 0) break;
+                if (playerCountLow())
+                    return;
 
                 if (bz_getTeamCount(teamOne) > bz_getTeamCount(teamTwo)) {strongTeam = teamOne; weakTeam = teamTwo;}
                 else {strongTeam = teamTwo; weakTeam = teamOne;}
@@ -577,7 +587,8 @@ void teamSwitch::Event(bz_EventData* eventData)
 
             if (balanceTeamsOnCap)
             {
-                if (bz_getTeamCount(teamOne) == 0 || bz_getTeamCount(teamTwo) == 0) break;
+                if (playerCountLow())
+                    return;
 
                 if (bz_getTeamCount(teamOne) > bz_getTeamCount(teamTwo)) {strongTeam = teamOne; weakTeam = teamTwo;}
                 else {strongTeam = teamTwo; weakTeam = teamOne;}
@@ -629,6 +640,9 @@ void teamSwitch::Event(bz_EventData* eventData)
 
             if (alwaysBalanceTeams)
             {
+                if (playerCountLow())
+                    return;
+
                 if (bz_getTeamCount(teamOne) > bz_getTeamCount(teamTwo)) {strongTeam = teamOne; weakTeam = teamTwo;}
                 else {strongTeam = teamTwo; weakTeam = teamOne;}
                 int bonusPoints = 8 * (bz_getTeamCount(weakTeam) - bz_getTeamCount(strongTeam)) + 3 * bz_getTeamCount(weakTeam);
