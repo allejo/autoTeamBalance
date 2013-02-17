@@ -12,7 +12,7 @@ Add this plug-in to the BZFlag build system and compile.
 
 ## Setup
 
-```bzfs -loadplugin /path/to/teamSwitch.so,1,2,3,4```
+    bzfs -loadplugin /path/to/teamSwitch.so,1,2,3,4
 
 ### Parameters
  1. [Integer] The amount of seconds the plugin should wait before automatically balancing teams when they are unfair. Default is 30 seconds.
