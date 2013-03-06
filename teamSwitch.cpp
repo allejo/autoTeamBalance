@@ -480,6 +480,7 @@ void teamSwitch::Event(bz_EventData* eventData)
                         if (pr->team == strongTeam)
                         {
                             allowctfdata->allow = false;
+                            bz_removePlayerFlag(pr->playerID);
                             switchPlayer(allowctfdata->playerCapping, teamTwoColor);
                             float pos[3] = {0, 0, 0};
 
@@ -502,6 +503,7 @@ void teamSwitch::Event(bz_EventData* eventData)
                         if (pr->team == strongTeam)
                         {
                             allowctfdata->allow = false;
+                            bz_removePlayerFlag(pr->playerID);
                             switchPlayer(allowctfdata->playerCapping, teamOneColor);
                             float pos[3] = {0, 0, 0};
 
