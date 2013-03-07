@@ -480,14 +480,19 @@ void teamSwitch::Event(bz_EventData* eventData)
                         if (pr->team == strongTeam)
                         {
                             allowctfdata->allow = false;
-                            bz_removePlayerFlag(pr->playerID);
                             switchPlayer(allowctfdata->playerCapping, teamTwoColor);
                             float pos[3] = {0, 0, 0};
 
                             if (bz_flagPlayer(0) == allowctfdata->playerCapping)
+                            {
+                                bz_removePlayerFlag(pr->playerID);
                                 bz_moveFlag(0, pos);
+                            }
                             else if (bz_flagPlayer(1) == allowctfdata->playerCapping)
+                            {
+                                bz_removePlayerFlag(pr->playerID);
                                 bz_moveFlag(1, pos);
+                            }
 
                             bz_sendTextMessage(allowctfdata->playerCapping, allowctfdata->playerCapping, "-_-__-___-___++ ########################################################################## ++____-___-__-_-");
                             bz_sendTextMessagef(allowctfdata->playerCapping, allowctfdata->playerCapping, "-_-__-___-___++ {{{ YOU GOT SWITCHED TO THE %s TEAM | SEE '/HELP SWITCH' FOR MORE INFO }}} ++____-___-__-_-", bz_toupper(teamTwoColor.c_str()));
@@ -503,14 +508,19 @@ void teamSwitch::Event(bz_EventData* eventData)
                         if (pr->team == strongTeam)
                         {
                             allowctfdata->allow = false;
-                            bz_removePlayerFlag(pr->playerID);
                             switchPlayer(allowctfdata->playerCapping, teamOneColor);
                             float pos[3] = {0, 0, 0};
 
                             if (bz_flagPlayer(0) == allowctfdata->playerCapping)
+                            {
+                                bz_removePlayerFlag(pr->playerID);
                                 bz_moveFlag(0, pos);
+                            }
                             else if (bz_flagPlayer(1) == allowctfdata->playerCapping)
+                            {
+                                bz_removePlayerFlag(pr->playerID);
                                 bz_moveFlag(1, pos);
+                            }
 
                             bz_sendTextMessage(allowctfdata->playerCapping, allowctfdata->playerCapping, "-_-__-___-___++ ########################################################################## ++____-___-__-_-");
                             bz_sendTextMessagef(allowctfdata->playerCapping, allowctfdata->playerCapping, "-_-__-___-___++ {{{ YOU GOT SWITCHED TO THE %s TEAM | SEE '/HELP SWITCH' FOR MORE INFO }}} ++____-___-__-_-", bz_toupper(teamOneColor.c_str()));
