@@ -105,10 +105,7 @@ void addPlayer(GameKeeper::Player *playerData, int index)
     void *bufStart = getDirectMessageBuffer();
     void *buf      = playerData->packPlayerUpdate(bufStart);
 
-    if (playerData->getIndex() == index) // send all players info about player[playerIndex]
-        broadcastMessage(MsgAddPlayer, (char*)buf - (char*)bufStart, bufStart);
-    else
-        directMessage(index, MsgAddPlayer, (char*)buf - (char*)bufStart, bufStart);
+    broadcastMessage(MsgAddPlayer, (char*)buf - (char*)bufStart, bufStart);
 
     int teamNum = int(playerData->player.getTeam());
     team[teamNum].team.size++;
@@ -133,6 +130,7 @@ bool switchPlayer(int index, std::string teamColor)
     if (strcmp(teamColor.c_str(), "observer") == 0) playerData->player.setTeam((TeamColor)ObserverTeam);
 
     addPlayer(playerData,index);
+    sendPlayerInfo();
 }
 
 bool bz_anyPlayers(bool observers = false)
