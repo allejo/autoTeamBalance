@@ -6,7 +6,6 @@ This BZFlag plug-in has the capability of swapping players to a different team w
 Add this plug-in to the BZFlag build system and compile.
 
     sh newplug.sh teamSwitch
-    cd teamSwitch
     make
     sudo make install
 
