@@ -47,8 +47,6 @@ These slash commands require the 'switch' permission and should only be given to
 ## Notes
 Because this plug-in bypasses the BZFlag API, this plug-in will not function on a Windows Server.
 
-Due to new revisions and new standards in the latest BZFlag trunk, you have troubles compiling this plug-in. To solve this issue add ```AM_CXXFLAGS = -std=c++0x``` to your Makefile.am file.
-
 ## License
 
 BSD
