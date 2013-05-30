@@ -131,6 +131,7 @@ bool switchPlayer(int index, std::string teamColor)
 
     addPlayer(playerData,index);
     sendPlayerInfo();
+    sendIPUpdate(-1, index);
 }
 
 bool bz_anyPlayers(bool observers = false)
