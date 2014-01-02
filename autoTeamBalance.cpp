@@ -17,12 +17,9 @@ League Overseer
 */
 
 #include <cmath>
+#include <cstdlib>
 #include <memory>
-#include <sstream>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string>
-#include <time.h>
 
 #include "bzfsAPI.h"
 #include "bzToolkit/bzToolkitAPI.h"
@@ -42,11 +39,6 @@ public:
     virtual void resetFlag (int flagID, int playerID);
     virtual bool teamsUnfair (bz_eTeamType &strongTeam, bz_eTeamType &weakTeam);
 
-    bool alwaysBalanceTeams;
-    bool balanceTeamsOnCap;
-    bool disableCapWithUnfairTeams;
-    int checkTeamBalanceTime;
-
     bool teamsUneven;
     double timeFirstUneven;
     bz_eTeamType TEAM_ONE, TEAM_TWO;
@@ -64,8 +56,6 @@ void teamSwitch::Init (const char* /*commandLine*/)
     // Register our custom slash commands
     bz_registerCustomSlashCommand("balance", this);
     bz_registerCustomSlashCommand("switch", this);
-
-    checkTeamBalanceTime = 30;
 
     // Assign our two team colors to eNoTeam simply so we have something to check for
     // when we are trying to find the two colors the map is using
@@ -118,6 +108,7 @@ void teamSwitch::Cleanup ()
 
 void teamSwitch::balanceTeams ()
 {
+    // If the player count is low, then there is no need to balance the teams
     if (playerCountLow())
     {
         return;
@@ -131,8 +122,10 @@ void teamSwitch::balanceTeams ()
     int teamDifference = abs(bz_getTeamCount(TEAM_ONE) - bz_getTeamCount(TEAM_TWO));
     if (teamDifference/2 != 0) { teamDifference--; }
 
+    // We will always have an even number of players here
     int amountOfPlayersToSwitch = teamDifference / 2;
 
+    // Loop through the amount of players that we need to switch
     for (int i = 0; i < amountOfPlayersToSwitch; i++)
     {
         int playerMoved = bztk_randomPlayer(strongTeam);
@@ -140,12 +133,12 @@ void teamSwitch::balanceTeams ()
         if (strongTeam == TEAM_TWO)
         {
             bztk_changeTeam(playerMoved, TEAM_ONE);
-            bz_sendTextMessagef(BZ_SERVER, playerMoved, "-_-__-___-___++ {{{ YOU WERE AUTOMATICALLY SWITCHED TO THE %s TEAM }}} ++____-___-__-_-", bz_toupper(bztk_eTeamTypeLiteral(TEAM_ONE).c_str()));
+            bz_sendTextMessagef(BZ_SERVER, playerMoved, "You were automatically switched to the %s team.", bz_tolower(bztk_eTeamTypeLiteral(TEAM_ONE).c_str()));
         }
         else if (strongTeam == TEAM_ONE)
         {
             bztk_changeTeam(playerMoved, TEAM_TWO);
-            bz_sendTextMessagef(BZ_SERVER, playerMoved, "-_-__-___-___++ {{{ YOU WERE AUTOMATICALLY SWITCHED TO THE %s TEAM }}} ++____-___-__-_-", bz_toupper(bztk_eTeamTypeLiteral(TEAM_TWO).c_str()));
+            bz_sendTextMessagef(BZ_SERVER, playerMoved, "You were automatically switched to the %s team.", bz_tolower(bztk_eTeamTypeLiteral(TEAM_TWO).c_str()));
         }
 
         // Commented out due to purpose being uncertain as to if it works or not
@@ -153,6 +146,8 @@ void teamSwitch::balanceTeams ()
         //playerData->spawned = true;
     }
 
+    // This variable is used for the automatic balancing based on a delay to mark the teams as
+    // unfair or not
     teamsUneven = false;
 }
 
@@ -176,8 +171,11 @@ bool teamSwitch::playerCountLow ()
 
 void teamSwitch::resetFlag (int flagID, int playerID)
 {
+    // The middle of the map
     float pos[3] = {0, 0, 0};
 
+    // Check if the player has a specific flag ID. Typically the flag ID will be 0 or 1 so we
+    // can check if the player has a team flag or not and see where to send the flag.
     if (bz_flagPlayer(flagID) == playerID)
     {
         bz_removePlayerFlag(playerID);
@@ -215,29 +213,41 @@ void teamSwitch::Event (bz_EventData* eventData)
             int playerID = allowctfdata->playerCapping;
             bz_eTeamType strongTeam, weakTeam;
 
+            // We will only disallow the capture if we're told to
             if (bz_getBZDBBool("_atbDisableCapWithUnfairTeams"))
             {
+                // Check if our player count is low
                 if (playerCountLow())
                 {
                     allowctfdata->allow = false;
+
+                    // Check which team flag the player is carrying so we can reset it
                     resetFlag(0, playerID);
                     resetFlag(1, playerID);
+
                     bz_sendTextMessage(BZ_SERVER, playerID, "Do not capture the flag with unfair teams; the flag has been reset.");
 
                     return;
                 }
 
+                // Check if the teams are unfair
                 if (teamsUnfair(strongTeam, weakTeam))
                 {
                     std::unique_ptr<bz_BasePlayerRecord> playerData(bz_getPlayerByIndex(playerID));
 
+                    // If the player capping is part of the strong team so we can switch them
                     if (playerData->team == strongTeam)
                     {
                         allowctfdata->allow = false;
+
+                        // Change the player's team
                         bztk_changeTeam(playerID, weakTeam);
+
+                        // Check which team flag the player is carrying so we can reset it
                         resetFlag(0, playerID);
                         resetFlag(1, playerID);
-                        bz_sendTextMessagef(BZ_SERVER, playerID, "-_-__-___-___++ {{{ YOU WERE AUTOMATICALLY SWITCHED TO THE %s TEAM }}} ++____-___-__-_-", bz_toupper(bztk_eTeamTypeLiteral(weakTeam).c_str()));
+
+                        bz_sendTextMessagef(BZ_SERVER, playerID, "You were switched to the %s.", bz_tolower(bztk_eTeamTypeLiteral(weakTeam).c_str()));
                     }
 
                     bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
@@ -253,22 +263,29 @@ void teamSwitch::Event (bz_EventData* eventData)
             int playerID = ctfdata->playerCapping;
             bz_eTeamType strongTeam, weakTeam;
 
+            // If the player is allowed to capture the flag, check to see if we need to balance the teams
             if (bz_getBZDBBool("_atbBalanceTeamsOnCap"))
             {
+                // If the player count is low, don't do anything because we can't do much
                 if (playerCountLow())
                 {
                     return;
                 }
 
+                // Check if the teams are unfair
                 if (teamsUnfair(strongTeam, weakTeam))
                 {
                     std::unique_ptr<bz_BasePlayerRecord> playerData(bz_getPlayerByIndex(playerID));
 
+                    // If the player who capped is part of the stronger team
                     if (playerData->team == strongTeam)
                     {
+                        // Switch the player
                         bztk_changeTeam(playerID, weakTeam);
-                        resetFlag(0, playerID);
-                        resetFlag(1, playerID);
+
+                        // Kill the player so they are forced to spawn on the base
+                        bz_killPlayer(playerID, 1);
+
                         bz_sendTextMessagef(BZ_SERVER, playerID, "You were automatically switched to the %s team to make the teams fair.", bztk_eTeamTypeLiteral(weakTeam).c_str());
                     }
 
@@ -279,17 +296,20 @@ void teamSwitch::Event (bz_EventData* eventData)
         }
         break;
 
-        case bz_eTickEvent: // The server's main loop has iterated
+        case bz_eTickEvent:
         {
             bz_eTeamType strongTeam, weakTeam;
 
+            // Check to see whether we were asked to always balance the teams
             if (bz_getBZDBBool("_atbAlwaysBalanceTeams"))
             {
+                // If the teams are low, then there's no need to check whether or not to the teams are uneven
                 if (playerCountLow())
                 {
                     return;
                 }
 
+                // Store this value for easy access
                 bool _teamsUnfair = teamsUnfair(strongTeam, weakTeam);
 
                 if (_teamsUnfair && !teamsUneven)
