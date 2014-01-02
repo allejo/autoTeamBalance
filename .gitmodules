@@ -1,0 +1,3 @@
+[submodule "bzToolkit"]
+	path = bzToolkit
+	url = https://github.com/allejo/bztoolkit.git
