@@ -98,6 +98,8 @@ _atbResetFlagToBase
 
 Because this plugin utilizes custom BZDB variables, using `-set _atbAlwaysBalanceTeams 1` in a configuration file or in an options block will cause an error; instead, `-setforced` must be used to set the value of the custom variable: `-setforced _atbAlwaysBalanceTeams 1`. These variables can be set and changed normally in-game with the `/set` command.
 
+*Warning:* For boolean BZDB variables, it is required that you use the respective 0 or 1 equivalent to true or false.
+
 ### Custom Slash Commands
 
     /balance
