@@ -411,7 +411,7 @@ bool teamSwitch::SlashCommand(int playerID, bz_ApiString command, bz_ApiString /
     {
         bz_eTeamType strongTeam, weakTeam;
 
-        if (teamsUnfair(strongTeam, weakTeam))
+        if (!teamsUnfair(strongTeam, weakTeam))
         {
             bz_sendTextMessage(BZ_SERVER, playerID, "Teams are detected to be even.");
             return true;
