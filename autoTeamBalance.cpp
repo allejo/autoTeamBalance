@@ -57,7 +57,6 @@ void teamSwitch::Init (const char* /*commandLine*/)
   // Register our custom slash commands
   bz_registerCustomSlashCommand("balance", this);
   bz_registerCustomSlashCommand("switch", this);
-  bz_registerCustomSlashCommand("testteambalance", this);
   
   // Assign our two team colors to eNoTeam simply so we have something to check for
   // when we are trying to find the two colors the map is using
