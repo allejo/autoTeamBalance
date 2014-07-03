@@ -116,11 +116,15 @@ bz_APIIntList* teamSwitch::getStrongestTeamPlayers(bz_eTeamType team, int number
     int playerId = playerlist->get(i);
     int losses = bz_getPlayerLosses(playerId);
     int wins = bz_getPlayerWins(playerId);
-    wins++; // increase by 1 to avaoid a division by zero error
-    losses++; // increase by 1 to avoid a division by zero error
-    double ratio = wins;
-    ratio/=losses;
-    int key = (ratio*100)+playerId; //Guarantees a unique index for the map while retaining ratio sort value.  If ration is the same between two players, higher index will sort higher
+    
+
+    int key = playerId;
+    double ratio = (wins-losses);
+    if((wins+losses)!=0) {   // Do this to avoid division by zero error
+      ratio/=(wins+losses);  // This the normalized score with the formula (wins-losses)/(wins+losses) value of -1 to 1
+      ratio+=1;  // This makes the negative ratio a postive while keeping the value compared to other players
+      key = ((int)(ratio*100)*100)+playerId;  // *100 to make it an integer.   *100 again to make room to add the playerid so it makes players with same ratio unique
+    }
     playerKDRatio[key] = playerId;
   }
   
