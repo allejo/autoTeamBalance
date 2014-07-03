@@ -34,8 +34,7 @@ public:
   
   virtual bool SlashCommand (int playerID, bz_ApiString command, bz_ApiString message, bz_APIStringList *params);
   
-  virtual void balanceTeams (void);
-  virtual bool playerCountLow (void);
+  virtual bool balanceTeams (void);
   virtual void resetFlag (int flagID, int playerID);
   virtual bool teamsUnfair (bz_eTeamType &strongTeam, bz_eTeamType &weakTeam);
   virtual bz_APIIntList* getStrongestTeamPlayers(bz_eTeamType team, int numberOfPlayers);
@@ -136,80 +135,78 @@ bz_APIIntList* teamSwitch::getStrongestTeamPlayers(bz_eTeamType team, int number
   return resp;
 }
 
-void teamSwitch::balanceTeams ()
+bool teamSwitch::balanceTeams ()
 {
-  // If the player count is low, then there is no need to balance the teams
-  if (playerCountLow())
-  {
-    bz_debugMessagef(2, "DEBUG :: Automatic Team Balance :: Player Count is low");
-    return;
+  // Find which team is the strongest team by getting the amount of players on it
+  bz_eTeamType strongTeam;
+  bz_eTeamType weakTeam;
+  
+  if(bz_getTeamCount(TEAM_ONE) > bz_getTeamCount(TEAM_TWO)) {
+    strongTeam = TEAM_ONE;
+    weakTeam = TEAM_TWO;
+  } else {
+    strongTeam = TEAM_TWO;
+    weakTeam = TEAM_ONE;
+  }
+
+  int strongTeamCount = bz_getTeamCount(strongTeam);
+  int weakTeamCount = bz_getTeamCount(weakTeam);
+  
+
+  //Sanity check
+  if(strongTeamCount==weakTeamCount) {
+    bz_debugMessagef(2, "DEBUG :: Automatic Team Balance :: Sanity check failed.  Teams are even.");
+    return false;
   }
   
-  // Find which team is the strongest team by getting the amount of players on it
-  bz_eTeamType strongTeam = (bz_getTeamCount(TEAM_ONE) > bz_getTeamCount(TEAM_TWO)) ? TEAM_ONE : TEAM_TWO;
-  
-  // See if the difference between the teams is an even or odd amount, we always need to switch an
-  // even amount of players so subtract one if the amount is odd
-  int teamDifference = abs(bz_getTeamCount(TEAM_ONE) - bz_getTeamCount(TEAM_TWO));
-////  if (teamDifference/2 != 0) { teamDifference--; }
-  
-  // We will always have an even number of players here
+  int teamDifference = strongTeamCount-weakTeamCount;
   int amountOfPlayersToSwitch = teamDifference / 2;
-  
-  bz_APIIntList* playerlist = getStrongestTeamPlayers(strongTeam, amountOfPlayersToSwitch);
 
+  //Sanity check to make sure we are emptying a team
+  if((strongTeamCount-amountOfPlayersToSwitch)<1) {
+    bz_debugMessagef(2, "DEBUG :: Automatic Team Balance :: Sanity check failed.  Attempted to empty a team.");
+    return false;
+  }
   
+  // Sanity check
+  bz_APIIntList* playerlist = getStrongestTeamPlayers(strongTeam, amountOfPlayersToSwitch);
+  for(unsigned int i=0; i<playerlist->size(); i++) {
+    if(bz_getPlayerTeam(playerlist->get(i))!=strongTeam){
+      bz_debugMessagef(2, "DEBUG :: Automatic Team Balance :: Sanity check failed.  Attempting to switch a player from the weak team.");
+      return false;
+    }
+  }
+
   
   // Loop through the players to switch
   for (int i = 0; i < playerlist->size(); i++)
   {
     int playerMoved = playerlist->get(i);
-    if (strongTeam == TEAM_TWO)
-    {
-      bztk_changeTeam(playerMoved, TEAM_ONE);
-      bz_sendTextMessagef(BZ_SERVER, playerMoved, "You were automatically switched to the %s team.", bz_tolower(bztk_eTeamTypeLiteral(TEAM_ONE).c_str()));
-    }
-    else if (strongTeam == TEAM_ONE)
-    {
-      bztk_changeTeam(playerMoved, TEAM_TWO);
-      bz_sendTextMessagef(BZ_SERVER, playerMoved, "You were automatically switched to the %s team.", bz_tolower(bztk_eTeamTypeLiteral(TEAM_TWO).c_str()));
-    }
-    
-    // Commented out due to purpose being uncertain as to if it works or not
-    //std::unique_ptr<bz_BasePlayerRecord> playerData(bz_getPlayerByIndex(playerMoved));
-    //playerData->spawned = true;
+    bztk_changeTeam(playerMoved, weakTeam);
+    bz_sendTextMessagef(BZ_SERVER, playerMoved, "You were automatically switched to the %s team.", bztk_eTeamTypeLiteral(weakTeam).c_str());
   }
   bz_deleteIntList(playerlist);
 
   // This variable is used for the automatic balancing based on a delay to mark the teams as
   // unfair or not
+  if(weakTeamCount==0) {
+    bz_ApiString teamflag = "";
+    if(weakTeam==eRedTeam) teamflag = "R*";
+    if(weakTeam==eBlueTeam) teamflag = "B*";
+    if(weakTeam==eGreenTeam) teamflag = "G*";
+    if(weakTeam==ePurpleTeam) teamflag = "P*";
+    if(teamflag!=""){
+      for(unsigned int i=0;i<bz_getNumFlags();i++){
+	bz_ApiString flagtype = bz_getFlagName(i);
+	if(teamflag==flagtype){
+	  bz_resetFlag(i);
+	  break;
+	}
+      }
+    }
+  }
   teamsUneven = false;
-}
-
-bool teamSwitch::playerCountLow ()
-{
-  
-  int difference = abs(bz_getTeamCount(TEAM_ONE) - bz_getTeamCount(TEAM_TWO));
-
-////Dracos Change:  Allow zero team count so if all players in a team leave, it will auto balance other team if difference > 1
-  if(bz_getTeamCount(TEAM_ONE)<4 && bz_getTeamCount(TEAM_TWO)<4 && difference<2) return true;
-  
-/*
-  if (bz_getTeamCount(TEAM_ONE) == 0 || bz_getTeamCount(TEAM_TWO) == 0)
-  {
-    return true;
-  }
-  
-  // Break if it's 2-1, 2-3, or 3-4
-  if (((bz_getTeamCount(TEAM_ONE) == 1 || bz_getTeamCount(TEAM_TWO) == 1) && (bz_getTeamCount(TEAM_ONE) == 2 || bz_getTeamCount(TEAM_TWO) == 2)) ||
-      ((bz_getTeamCount(TEAM_ONE) == 2 || bz_getTeamCount(TEAM_TWO) == 2) && (bz_getTeamCount(TEAM_ONE) == 3 || bz_getTeamCount(TEAM_TWO) == 3)) ||
-      ((bz_getTeamCount(TEAM_ONE) == 3 || bz_getTeamCount(TEAM_TWO) == 3) && (bz_getTeamCount(TEAM_ONE) == 4 || bz_getTeamCount(TEAM_TWO) == 4)))
-  {
-    return true;
-  }
-*/
-  
-  return false;
+  return true;
 }
 
 void teamSwitch::resetFlag (int flagID, int playerID)
@@ -239,12 +236,14 @@ bool teamSwitch::teamsUnfair (bz_eTeamType &strongTeam, bz_eTeamType &weakTeam)
   // Find which team is the strongest team by getting the amount of players on it
   strongTeam = (bz_getTeamCount(TEAM_ONE) > bz_getTeamCount(TEAM_TWO)) ? TEAM_ONE : TEAM_TWO;
   weakTeam   = (bz_getTeamCount(TEAM_ONE) > bz_getTeamCount(TEAM_TWO)) ? TEAM_TWO : TEAM_ONE;
+  int strongTeamCount = bz_getTeamCount(strongTeam);
+  int weakTeamCount = bz_getTeamCount(weakTeam);
  
-  
+  if((strongTeamCount-weakTeamCount)<2) return false;
   
   // Calculate the amount of bonus points given for a flag capture
   int bonusPoints = 8 * (bz_getTeamCount(weakTeam) - bz_getTeamCount(strongTeam)) + 3 * bz_getTeamCount(weakTeam);
-
+  
   return (bonusPoints < 0);
 }
 
@@ -261,20 +260,6 @@ void teamSwitch::Event (bz_EventData* eventData)
       // We will only disallow the capture if we're told to
       if (bz_getBZDBBool("_atbDisableCapWithUnfairTeams"))
       {
-	// Check if our player count is low
-	if (playerCountLow())
-	{
-	  allowctfdata->allow = false;
-	  
-	  // Check which team flag the player is carrying so we can reset it
-	  resetFlag(0, playerID);
-	  resetFlag(1, playerID);
-	  
-	  bz_sendTextMessage(BZ_SERVER, playerID, "Do not capture the flag with unfair teams; the flag has been reset.");
-	  
-	  return;
-	}
-	
 	// Check if the teams are unfair
 	if (teamsUnfair(strongTeam, weakTeam))
 	{
@@ -294,9 +279,6 @@ void teamSwitch::Event (bz_EventData* eventData)
 	    
 	    bz_sendTextMessagef(BZ_SERVER, playerID, "You were switched to the %s.", bz_tolower(bztk_eTeamTypeLiteral(weakTeam).c_str()));
 	  }
-	  
-	  bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
-	  balanceTeams();
 	}
       }
     }
@@ -311,12 +293,6 @@ void teamSwitch::Event (bz_EventData* eventData)
       // If the player is allowed to capture the flag, check to see if we need to balance the teams
       if (bz_getBZDBBool("_atbBalanceTeamsOnCap"))
       {
-	// If the player count is low, don't do anything because we can't do much
-	if (playerCountLow())
-	{
-	  return;
-	}
-	
 	// Check if the teams are unfair
 	if (teamsUnfair(strongTeam, weakTeam))
 	{
@@ -328,14 +304,8 @@ void teamSwitch::Event (bz_EventData* eventData)
 	    // Switch the player
 	    bztk_changeTeam(playerID, weakTeam);
 	    
-	    // Kill the player so they are forced to spawn on the base
-	    bz_killPlayer(playerID, 1);
-	    
 	    bz_sendTextMessagef(BZ_SERVER, playerID, "You were automatically switched to the %s team to make the teams fair.", bztk_eTeamTypeLiteral(weakTeam).c_str());
 	  }
-	  
-	  bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
-	  balanceTeams();
 	}
       }
     }
@@ -348,12 +318,6 @@ void teamSwitch::Event (bz_EventData* eventData)
       // Check to see whether we were asked to always balance the teams
       if (bz_getBZDBBool("_atbAlwaysBalanceTeams"))
       {
-	// If the teams are low, then there's no need to check whether or not to the teams are uneven
-	if (playerCountLow())
-	{
-	  return;
-	}
-	
 	// Store this value for easy access
 	bool _teamsUnfair = teamsUnfair(strongTeam, weakTeam);
 	
@@ -369,8 +333,9 @@ void teamSwitch::Event (bz_EventData* eventData)
 	
 	if (teamsUneven && (timeFirstUneven + bz_getBZDBInt("_atbBalanceDelay") < bz_getCurrentTime()))
 	{
-	  bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
-	  balanceTeams();
+	  if(balanceTeams()){
+	    bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
+	  }
 	}
       }
     }
@@ -462,9 +427,10 @@ bool teamSwitch::SlashCommand(int playerID, bz_ApiString command, bz_ApiString /
       return true;
     }
     
-    balanceTeams();
-    bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
-    bz_sendTextMessage(BZ_SERVER, playerID, "Teams have been balanced");
+    if(balanceTeams()){
+      bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
+      bz_sendTextMessage(BZ_SERVER, playerID, "Teams have been balanced");
+    }
     
     return true;
   }
