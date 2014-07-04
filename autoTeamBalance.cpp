@@ -245,10 +245,13 @@ bool teamSwitch::teamsUnfair (bz_eTeamType &strongTeam, bz_eTeamType &weakTeam)
  
   if((strongTeamCount-weakTeamCount)<2) return false;
   
-  // Calculate the amount of bonus points given for a flag capture
-  int bonusPoints = 8 * (bz_getTeamCount(weakTeam) - bz_getTeamCount(strongTeam)) + 3 * bz_getTeamCount(weakTeam);
+  // Calculate the amount of bonus points given for a flag capture  **OLD WAY
+  //int bonusPoints = 8 * (bz_getTeamCount(weakTeam) - bz_getTeamCount(strongTeam)) + 3 * bz_getTeamCount(weakTeam);
+  //return (bonusPoints < 0);
   
-  return (bonusPoints < 0);
+  int alloweddiff = round((strongTeamCount+weakTeamCount)*.1);  //Rounded 10% of the total players
+  
+  return !((strongTeamCount-weakTeamCount)<alloweddiff);
 }
 
 void teamSwitch::Event (bz_EventData* eventData)
