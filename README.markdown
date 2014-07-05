@@ -108,25 +108,20 @@ Because this plugin utilizes custom BZDB variables, using `-set _atbAlwaysBalanc
 
 /balance
 
-- Permission Requirement: Spawn
+- Permission Requirement: Switch
 
 - Description: Force a balance of the teams
 
 /switch
 
-- Permission Requirement: Spawn
+- Permission Requirement: Switch
 
 - Description: If a player slot or callsign is provided, it will allow an admin to switch another player. If there is no player slot or callsign, then the admin will be switched.
 
-Appendix
---------
-### The Algorithm
+Contributing
+------------
 
-This is the algorithm used by the plugin to determine whether the teams are fair or not.
-
-`8 * (weakTeam - strongTeam) + 3 * (weakTeam)`
-
-'weakTeam' is defined as the team with less players and 'strongTeam' is defined as the team with more players. If this equation returns a negative number, then the teams are unfair and the plug-in will balance the teams provided the plug-in is configured to do so.
+If you would like to contribute to this project, please be sure to follow the formatting that already exists (e.g. using 4 spaces for indentation instead of tabs). Please be sure that if you fork this repository, you sync the fork respectively with your fork to get any changes that have been made to the repository. Take a look at GitHub's [syncing a fork](https://help.github.com/articles/syncing-a-fork) article that explains the process.
 
 License
 -------
