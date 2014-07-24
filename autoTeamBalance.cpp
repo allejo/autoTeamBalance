@@ -24,10 +24,19 @@ League Overseer
 #include "bzfsAPI.h"
 #include "bzToolkit/bzToolkitAPI.h"
 
+// Define plugin name
+const std::string PLUGIN_NAME = "Automatic Team Balance";
+
+// Define plugin version numbering
+const int MAJOR = 1;
+const int MINOR = 6;
+const int REV = 0;
+const int BUILD = 58;
+
 class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
 public:
-    virtual const char* Name () {return "Automatic Team Balance";}
+    virtual const char* Name (void);
     virtual void Init (const char* commandLine);
     virtual void Cleanup (void);
     virtual void Event (bz_EventData *eventData);
@@ -35,22 +44,40 @@ public:
     virtual bool SlashCommand (int playerID, bz_ApiString command, bz_ApiString message, bz_APIStringList *params);
 
     virtual bool balanceTeams (void);
+    virtual void queuePlayerSwap (int playerID, bz_eTeamType targetTeam);
     virtual void resetFlag (int flagID, int playerID);
     virtual bool teamsUnfair (bz_eTeamType &strongTeam, bz_eTeamType &weakTeam);
-    virtual bz_APIIntList* getStrongestTeamPlayers(bz_eTeamType team, int numberOfPlayers);
+    virtual std::unique_ptr<bz_APIIntList> getStrongestTeamPlayers(bz_eTeamType team, int numberOfPlayers);
 
-    bool teamsUneven;
+    bool swapQueue[256], teamsUneven;
     double timeFirstUneven;
-    bz_eTeamType TEAM_ONE, TEAM_TWO;
+    bz_eTeamType TEAM_ONE, TEAM_TWO, targetTeamQueue[256];
 };
 
 BZ_PLUGIN(teamSwitch)
+
+const char* teamSwitch::Name (void)
+{
+    static std::string pluginBuild = "";
+
+    if (!pluginBuild.size())
+    {
+        std::ostringstream pluginBuildStream;
+
+        pluginBuildStream << PLUGIN_NAME << " " << MAJOR << "." << MINOR << "." << REV << " (" << BUILD << ")";
+        pluginBuild = pluginBuildStream.str();
+    }
+
+    return pluginBuild.c_str();
+}
 
 void teamSwitch::Init (const char* /*commandLine*/)
 {
     // Register our events with Register()
     Register(bz_eAllowCTFCaptureEvent);
     Register(bz_eCaptureEvent);
+    Register(bz_ePlayerDieEvent);
+    Register(bz_ePlayerJoinEvent);
     Register(bz_eTickEvent);
 
     // Register our custom slash commands
@@ -106,10 +133,11 @@ void teamSwitch::Cleanup ()
     bz_removeCustomSlashCommand("switch");
 }
 
-bz_APIIntList* teamSwitch::getStrongestTeamPlayers(bz_eTeamType team, int numberOfPlayers)
+std::unique_ptr<bz_APIIntList> teamSwitch::getStrongestTeamPlayers(bz_eTeamType team, int numberOfPlayers)
 {
-    bz_APIIntList* playerlist = bztk_getTeamPlayerIndexList(team);
-    bz_APIIntList* resp = bz_newIntList();
+    std::unique_ptr<bz_APIIntList> playerlist(bztk_getTeamPlayerIndexList(team));
+    std::unique_ptr<bz_APIIntList> resp(bz_newIntList());
+
     std::map<int, int> playerKDRatio; // Map to hold the Kill/Death Ratio of each team player. Std maps automatically sort keys, hence using KD ratio as key
 
     for (unsigned int i = 0; i < playerlist->size(); i++)
@@ -143,12 +171,10 @@ bz_APIIntList* teamSwitch::getStrongestTeamPlayers(bz_eTeamType team, int number
             break;
     }
 
-    bz_deleteIntList(playerlist);
-
     return resp;
 }
 
-bool teamSwitch::balanceTeams ()
+bool teamSwitch::balanceTeams (void)
 {
     // Find which team is the strongest team by getting the amount of players on it
     bz_eTeamType strongTeam;
@@ -186,7 +212,7 @@ bool teamSwitch::balanceTeams ()
     }
 
     // Sanity check
-    bz_APIIntList* playerlist = getStrongestTeamPlayers(strongTeam, amountOfPlayersToSwitch);
+    std::unique_ptr<bz_APIIntList> playerlist(getStrongestTeamPlayers(strongTeam, amountOfPlayersToSwitch));
 
     for (unsigned int i = 0; i < playerlist->size(); i++)
     {
@@ -205,8 +231,6 @@ bool teamSwitch::balanceTeams ()
         bztk_changeTeam(playerMoved, weakTeam);
         bz_sendTextMessagef(BZ_SERVER, playerMoved, "You were automatically switched to the %s team.", bztk_eTeamTypeLiteral(weakTeam).c_str());
     }
-
-    bz_deleteIntList(playerlist);
 
     // This variable is used for the automatic balancing based on a delay to mark the teams as
     // unfair or not
@@ -236,6 +260,12 @@ bool teamSwitch::balanceTeams ()
 
     teamsUneven = false;
     return true;
+}
+
+void teamSwitch::queuePlayerSwap (int playerID, bz_eTeamType targetTeam)
+{
+    swapQueue[playerID] = true;
+    targetTeamQueue[playerID] = eNoTeam;
 }
 
 void teamSwitch::resetFlag (int flagID, int playerID)
@@ -341,6 +371,37 @@ void teamSwitch::Event (bz_EventData* eventData)
         }
         break;
 
+        case bz_ePlayerDieEvent: // This event is called each time a tank is killed.
+        {
+            bz_PlayerDieEventData_V1* dieData = (bz_PlayerDieEventData_V1*)eventData;
+
+            int playerID = dieData->playerID;
+
+            if (swapQueue[playerID])
+            {
+                swapQueue[playerID] = false;
+                targetTeamQueue[playerID] = eNoTeam;
+
+                if (targetTeamQueue[playerID] != eNoTeam)
+                {
+                    bztk_changeTeam(playerID, targetTeamQueue[playerID]);
+                    bz_sendTextMessagef(BZ_SERVER, playerID, "You were automatically switched to the %s team to make the teams fair.", bztk_eTeamTypeLiteral(targetTeamQueue[playerID]).c_str());
+                }
+            }
+        }
+        break;
+
+        case bz_ePlayerJoinEvent: // This event is called each time a player joins the game
+        {
+            bz_PlayerJoinPartEventData_V1* joinData = (bz_PlayerJoinPartEventData_V1*)eventData;
+
+            int playerID = joinData->playerID;
+
+            swapQueue[playerID] = false;
+            targetTeamQueue[playerID] = eNoTeam;
+        }
+        break;
+
         case bz_eTickEvent:
         {
             bz_eTeamType strongTeam, weakTeam;
@@ -363,7 +424,8 @@ void teamSwitch::Event (bz_EventData* eventData)
 
                 if (teamsUneven && (timeFirstUneven + bz_getBZDBInt("_atbBalanceDelay") < bz_getCurrentTime()))
                 {
-                    if(balanceTeams()){
+                    if (balanceTeams())
+                    {
                         bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
                     }
                 }
@@ -457,9 +519,10 @@ bool teamSwitch::SlashCommand(int playerID, bz_ApiString command, bz_ApiString /
             return true;
         }
 
-        if(balanceTeams()){
-            bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
-            bz_sendTextMessage(BZ_SERVER, playerID, "Teams have been balanced");
+        if (balanceTeams())
+        {
+            bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Team balance has been queued");
+            bz_sendTextMessage(BZ_SERVER, playerID, "Teams will be balanced");
         }
 
         return true;
