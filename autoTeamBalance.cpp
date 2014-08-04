@@ -31,7 +31,7 @@ const std::string PLUGIN_NAME = "Automatic Team Balance";
 const int MAJOR = 1;
 const int MINOR = 6;
 const int REV = 0;
-const int BUILD = 61;
+const int BUILD = 62;
 
 class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
@@ -263,10 +263,10 @@ bool teamSwitch::balanceTeams (void)
     return true;
 }
 
-void teamSwitch::queuePlayerSwap (int playerID, bz_eTeamType targetTeam)
+void teamSwitch::queuePlayerSwap (int playerID, bz_eTeamType targetTeam = eNoTeam)
 {
     swapQueue[playerID] = true;
-    targetTeamQueue[playerID] = eNoTeam;
+    targetTeamQueue[playerID] = targetTeam;
 }
 
 void teamSwitch::resetFlag (int flagID, int playerID)
