@@ -31,7 +31,7 @@ const std::string PLUGIN_NAME = "Automatic Team Balance";
 const int MAJOR = 1;
 const int MINOR = 6;
 const int REV = 0;
-const int BUILD = 58;
+const int BUILD = 61;
 
 class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
@@ -146,7 +146,7 @@ std::unique_ptr<bz_APIIntList> teamSwitch::getStrongestTeamPlayers(bz_eTeamType 
         int losses   = bz_getPlayerLosses(playerId);
         int wins     = bz_getPlayerWins(playerId);
 
-        int key = playerId;
+        int    key   = playerId;
         double ratio = (wins-losses);
 
         if ((wins + losses) != 0) // Do this to avoid division by zero error
@@ -168,7 +168,9 @@ std::unique_ptr<bz_APIIntList> teamSwitch::getStrongestTeamPlayers(bz_eTeamType 
         j++;
 
         if (j == numberOfPlayers)
+        {
             break;
+        }
     }
 
     return resp;
@@ -229,18 +231,17 @@ bool teamSwitch::balanceTeams (void)
     {
         int playerMoved = playerlist->get(i);
         queuePlayerSwap(playerMoved, weakTeam);
-        bz_sendTextMessagef(BZ_SERVER, playerMoved, "You were automatically switched to the %s team.", bztk_eTeamTypeLiteral(weakTeam).c_str());
     }
 
     // This variable is used for the automatic balancing based on a delay to mark the teams as
     // unfair or not
-    if (weakTeamCount==0)
+    if (weakTeamCount == 0)
     {
         bz_ApiString teamflag = "";
 
-        if (weakTeam == eRedTeam) teamflag = "R*";
-        if (weakTeam == eBlueTeam) teamflag = "B*";
-        if (weakTeam == eGreenTeam) teamflag = "G*";
+        if (weakTeam == eRedTeam)    teamflag = "R*";
+        if (weakTeam == eBlueTeam)   teamflag = "B*";
+        if (weakTeam == eGreenTeam)  teamflag = "G*";
         if (weakTeam == ePurpleTeam) teamflag = "P*";
 
         if (teamflag!="")
@@ -300,7 +301,9 @@ bool teamSwitch::teamsUnfair (bz_eTeamType &strongTeam, bz_eTeamType &weakTeam)
     int weakTeamCount   = bz_getTeamCount(weakTeam);
 
     if ((strongTeamCount - weakTeamCount) < 2)
+    {
         return false;
+    }
 
     int alloweddiff = round((strongTeamCount+weakTeamCount) * .1); // Rounded 10% of the total players
 
@@ -364,6 +367,9 @@ void teamSwitch::Event (bz_EventData* eventData)
                         // Switch the player
                         bztk_changeTeam(playerID, weakTeam);
 
+                        // Kill the player as punishment and swap them to the weak team
+                        bz_killPlayer(playerID, false);
+
                         bz_sendTextMessagef(BZ_SERVER, playerID, "You were automatically switched to the %s team to make the teams fair.", bztk_eTeamTypeLiteral(weakTeam).c_str());
                     }
                 }
@@ -426,7 +432,7 @@ void teamSwitch::Event (bz_EventData* eventData)
                 {
                     if (balanceTeams())
                     {
-                        bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Balancing unfair teams...");
+                        bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Teams will be balanced automatically");
                     }
                 }
             }
@@ -521,8 +527,8 @@ bool teamSwitch::SlashCommand(int playerID, bz_ApiString command, bz_ApiString /
 
         if (balanceTeams())
         {
-            bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Team balance has been queued");
-            bz_sendTextMessage(BZ_SERVER, playerID, "Teams will be balanced");
+            bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Teams will be balanced automatically");
+            bz_sendTextMessage(BZ_SERVER, playerID, "Players will be swapped teams as they die in order to balance teams");
         }
 
         return true;
