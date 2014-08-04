@@ -31,7 +31,7 @@ const std::string PLUGIN_NAME = "Automatic Team Balance";
 const int MAJOR = 1;
 const int MINOR = 6;
 const int REV = 0;
-const int BUILD = 62;
+const int BUILD = 63;
 
 class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
@@ -335,6 +335,9 @@ void teamSwitch::Event (bz_EventData* eventData)
 
                         // Change the player's team
                         bztk_changeTeam(playerID, weakTeam);
+
+                        // Kill the player as punishment and swap them to the weak team
+                        bz_killPlayer(playerID, false);
 
                         // Check which team flag the player is carrying so we can reset it
                         resetFlag(0, playerID);
