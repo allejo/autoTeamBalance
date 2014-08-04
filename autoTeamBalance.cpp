@@ -379,14 +379,14 @@ void teamSwitch::Event (bz_EventData* eventData)
 
             if (swapQueue[playerID])
             {
-                swapQueue[playerID] = false;
-                targetTeamQueue[playerID] = eNoTeam;
-
                 if (targetTeamQueue[playerID] != eNoTeam)
                 {
                     bztk_changeTeam(playerID, targetTeamQueue[playerID]);
                     bz_sendTextMessagef(BZ_SERVER, playerID, "You were automatically switched to the %s team to make the teams fair.", bztk_eTeamTypeLiteral(targetTeamQueue[playerID]).c_str());
                 }
+
+                swapQueue[playerID] = false;
+                targetTeamQueue[playerID] = eNoTeam;
             }
         }
         break;
