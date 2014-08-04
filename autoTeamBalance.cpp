@@ -228,7 +228,7 @@ bool teamSwitch::balanceTeams (void)
     for (int i = 0; i < playerlist->size(); i++)
     {
         int playerMoved = playerlist->get(i);
-        bztk_changeTeam(playerMoved, weakTeam);
+        queuePlayerSwap(playerMoved, weakTeam);
         bz_sendTextMessagef(BZ_SERVER, playerMoved, "You were automatically switched to the %s team.", bztk_eTeamTypeLiteral(weakTeam).c_str());
     }
 
