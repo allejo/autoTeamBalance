@@ -31,7 +31,7 @@ const std::string PLUGIN_NAME = "Automatic Team Balance";
 const int MAJOR = 1;
 const int MINOR = 6;
 const int REV = 0;
-const int BUILD = 63;
+const int BUILD = 64;
 
 class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
@@ -76,8 +76,8 @@ void teamSwitch::Init (const char* /*commandLine*/)
     // Register our events with Register()
     Register(bz_eAllowCTFCaptureEvent);
     Register(bz_eCaptureEvent);
-    Register(bz_ePlayerDieEvent);
     Register(bz_ePlayerJoinEvent);
+    Register(bz_ePlayerSpawnEvent);
     Register(bz_eTickEvent);
 
     // Register our custom slash commands
@@ -380,11 +380,22 @@ void teamSwitch::Event (bz_EventData* eventData)
         }
         break;
 
-        case bz_ePlayerDieEvent: // This event is called each time a tank is killed.
+        case bz_ePlayerJoinEvent: // This event is called each time a player joins the game
         {
-            bz_PlayerDieEventData_V1* dieData = (bz_PlayerDieEventData_V1*)eventData;
+            bz_PlayerJoinPartEventData_V1* joinData = (bz_PlayerJoinPartEventData_V1*)eventData;
 
-            int playerID = dieData->playerID;
+            int playerID = joinData->playerID;
+
+            swapQueue[playerID] = false;
+            targetTeamQueue[playerID] = eNoTeam;
+        }
+        break;
+
+        case bz_ePlayerSpawnEvent: // This event is called each time a tank is killed.
+        {
+            bz_PlayerSpawnEventData_V1* spawnData = (bz_PlayerSpawnEventData_V1*)eventData;
+
+            int playerID = spawnData->playerID;
 
             if (swapQueue[playerID])
             {
@@ -397,17 +408,6 @@ void teamSwitch::Event (bz_EventData* eventData)
                 swapQueue[playerID] = false;
                 targetTeamQueue[playerID] = eNoTeam;
             }
-        }
-        break;
-
-        case bz_ePlayerJoinEvent: // This event is called each time a player joins the game
-        {
-            bz_PlayerJoinPartEventData_V1* joinData = (bz_PlayerJoinPartEventData_V1*)eventData;
-
-            int playerID = joinData->playerID;
-
-            swapQueue[playerID] = false;
-            targetTeamQueue[playerID] = eNoTeam;
         }
         break;
 
