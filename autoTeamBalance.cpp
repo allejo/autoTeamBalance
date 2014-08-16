@@ -30,8 +30,8 @@ const std::string PLUGIN_NAME = "Automatic Team Balance";
 // Define plugin version numbering
 const int MAJOR = 1;
 const int MINOR = 6;
-const int REV = 0;
-const int BUILD = 64;
+const int REV = 1;
+const int BUILD = 66;
 
 class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
@@ -115,11 +115,14 @@ void teamSwitch::Init (const char* /*commandLine*/)
              bztk_eTeamTypeLiteral(TEAM_TWO).c_str());
 
     // Register some custom BZDB variables
+    bztk_registerCustomStringBZDB("_atbSwapPlayerAlgorithm", "random");
+
     bztk_registerCustomBoolBZDB("_atbAlwaysBalanceTeams", false);
     bztk_registerCustomBoolBZDB("_atbBalanceTeamsOnCap", false);
-    bztk_registerCustomIntBZDB("_atbBalanceDelay", 30);
     bztk_registerCustomBoolBZDB("_atbDisableCapWithUnfairTeams", false);
     bztk_registerCustomBoolBZDB("_atbResetFlagToBase", false);
+
+    bztk_registerCustomIntBZDB ("_atbBalanceDelay", 30);
 
     teamsUneven = false;
 }
@@ -206,31 +209,47 @@ bool teamSwitch::balanceTeams (void)
     int teamDifference = strongTeamCount-weakTeamCount;
     int amountOfPlayersToSwitch = teamDifference / 2;
 
-    // Sanity check to make sure we are emptying a team
+    // Sanity check to make sure we are not emptying a team
     if ((strongTeamCount - amountOfPlayersToSwitch) < 1)
     {
         bz_debugMessagef(2, "DEBUG :: Automatic Team Balance :: Sanity check failed. Attempted to empty a team.");
         return false;
     }
 
-    // Sanity check
-    std::unique_ptr<bz_APIIntList> playerlist(getStrongestTeamPlayers(strongTeam, amountOfPlayersToSwitch));
-
-    for (unsigned int i = 0; i < playerlist->size(); i++)
+    if (bz_getBZDBString("_atbSwapPlayerAlgorithm") == "strength")
     {
-        if (bz_getPlayerTeam(playerlist->get(i)) != strongTeam)
-        {
-            bz_debugMessagef(2, "DEBUG :: Automatic Team Balance :: Sanity check failed. Attempting to switch a player from the weak team.");
+        bz_debugMessagef(3, "DEBUG :: Automatic Team Balance :: Using strength algorithm to balance teams.");
 
-            return false;
+        // Sanity check
+        std::unique_ptr<bz_APIIntList> playerlist(getStrongestTeamPlayers(strongTeam, amountOfPlayersToSwitch));
+
+        for (unsigned int i = 0; i < playerlist->size(); i++)
+        {
+            if (bz_getPlayerTeam(playerlist->get(i)) != strongTeam)
+            {
+                bz_debugMessagef(2, "DEBUG :: Automatic Team Balance :: Sanity check failed. Attempting to switch a player from the weak team.");
+
+                return false;
+            }
+        }
+
+        // Loop through the players to switch
+        for (int i = 0; i < playerlist->size(); i++)
+        {
+            int playerMoved = playerlist->get(i);
+            queuePlayerSwap(playerMoved, weakTeam);
         }
     }
-
-    // Loop through the players to switch
-    for (int i = 0; i < playerlist->size(); i++)
+    // When there are more algorithms, I'll enable this if statement but until now, we'll comment it out so it defaults to random
+    else /*if (bz_getBZDBString("_atbSwapPlayerAlgorithm") == "random")*/
     {
-        int playerMoved = playerlist->get(i);
-        queuePlayerSwap(playerMoved, weakTeam);
+        bz_debugMessagef(3, "DEBUG :: Automatic Team Balance :: Using random algorithm to balance teams.");
+
+        for (int i = 0; i < amountOfPlayersToSwitch; i++)
+        {
+            int playerMoved = bztk_randomPlayer(strongTeam);
+            queuePlayerSwap(playerMoved, weakTeam);
+        }
     }
 
     // This variable is used for the automatic balancing based on a delay to mark the teams as
