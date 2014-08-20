@@ -267,14 +267,9 @@ bool teamSwitch::balanceTeams (void)
     // unfair or not
     if (weakTeamCount == 0)
     {
-        bz_ApiString teamflag = "";
+        bz_ApiString teamflag = bztk_getFlagFromTeam(weakTeam);
 
-        if (weakTeam == eRedTeam)    teamflag = "R*";
-        if (weakTeam == eBlueTeam)   teamflag = "B*";
-        if (weakTeam == eGreenTeam)  teamflag = "G*";
-        if (weakTeam == ePurpleTeam) teamflag = "P*";
-
-        if (teamflag!="")
+        if (teamflag != "")
         {
             for (unsigned int i = 0; i < bz_getNumFlags(); i++)
             {
@@ -502,21 +497,12 @@ bool teamSwitch::SlashCommand(int playerID, bz_ApiString command, bz_ApiString /
 
         if (params->size() == 2)
         {
-            if (std::string(params->get(0).c_str()).find("#") != std::string::npos)
-            {
-                victimID = atoi(std::string(params->get(0).c_str()).erase(0,1).c_str());
-            }
-            else
-            {
-                std::shared_ptr<bz_BasePlayerRecord> playerData(bztk_getPlayerByCallsign(params->get(0).c_str()));
-                victimID = (playerData != NULL) ? playerData->playerID : -1;
-            }
-
+            victimID   = bztk_getIDFromCallsignOrID(params->get(0).c_str());
             targetTeam = bztk_eTeamType(params->get(1).c_str());
         }
         else
         {
-            victimID = playerID;
+            victimID   = playerID;
             targetTeam = bztk_eTeamType(params->get(0).c_str());
         }
 
