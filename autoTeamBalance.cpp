@@ -30,8 +30,8 @@ const std::string PLUGIN_NAME = "Automatic Team Balance";
 // Define plugin version numbering
 const int MAJOR = 1;
 const int MINOR = 6;
-const int REV = 1;
-const int BUILD = 66;
+const int REV = 2;
+const int BUILD = 67;
 
 class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
@@ -49,9 +49,10 @@ public:
     virtual bool teamsUnfair (bz_eTeamType &strongTeam, bz_eTeamType &weakTeam);
     virtual std::unique_ptr<bz_APIIntList> getStrongestTeamPlayers(bz_eTeamType team, int numberOfPlayers);
 
-    bool swapQueue[256], teamsUneven;
+    bool swapQueue[256], teamsUneven, balanceQueued;
     double timeFirstUneven;
     bz_eTeamType TEAM_ONE, TEAM_TWO, targetTeamQueue[256];
+    std::vector<int> queuedPlayers;
 };
 
 BZ_PLUGIN(teamSwitch)
@@ -181,6 +182,16 @@ std::unique_ptr<bz_APIIntList> teamSwitch::getStrongestTeamPlayers(bz_eTeamType 
 
 bool teamSwitch::balanceTeams (void)
 {
+    // If a balance has already been queued, then don't try balancing again or else we'll swap more players
+    // on accident
+    if (balanceQueued)
+    {
+        return false;
+    }
+
+    // We'll queue our balance
+    balanceQueued = true;
+
     // Find which team is the strongest team by getting the amount of players on it
     bz_eTeamType strongTeam;
     bz_eTeamType weakTeam;
@@ -286,6 +297,7 @@ void teamSwitch::queuePlayerSwap (int playerID, bz_eTeamType targetTeam = eNoTea
 {
     swapQueue[playerID] = true;
     targetTeamQueue[playerID] = targetTeam;
+    queuedPlayers.push_back(playerID);
 }
 
 void teamSwitch::resetFlag (int flagID, int playerID)
@@ -426,6 +438,15 @@ void teamSwitch::Event (bz_EventData* eventData)
 
                 swapQueue[playerID] = false;
                 targetTeamQueue[playerID] = eNoTeam;
+
+                // Remove player from the queue
+                queuedPlayers.erase(std::remove(queuedPlayers.begin(), queuedPlayers.end(), playerID), queuedPlayers.end());
+
+                // We've swapped the last player we had intended to move, so we're done with this round of balancing
+                if (queuedPlayers.empty())
+                {
+                    balanceQueued = false;
+                }
             }
         }
         break;
@@ -452,7 +473,7 @@ void teamSwitch::Event (bz_EventData* eventData)
 
                 if (teamsUneven && (timeFirstUneven + bz_getBZDBInt("_atbBalanceDelay") < bz_getCurrentTime()))
                 {
-                    if (balanceTeams())
+                    if (!balanceQueued && balanceTeams())
                     {
                         bz_sendTextMessage(BZ_SERVER, BZ_ALLUSERS, "Teams will be balanced automatically");
                     }
