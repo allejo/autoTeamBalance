@@ -31,7 +31,7 @@ const std::string PLUGIN_NAME = "Automatic Team Balance";
 const int MAJOR = 1;
 const int MINOR = 6;
 const int REV = 2;
-const int BUILD = 67;
+const int BUILD = 70;
 
 class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
