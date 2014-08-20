@@ -47,7 +47,7 @@ public:
     virtual void queuePlayerSwap (int playerID, bz_eTeamType targetTeam);
     virtual void resetFlag (int flagID, int playerID);
     virtual bool teamsUnfair (bz_eTeamType &strongTeam, bz_eTeamType &weakTeam);
-    virtual std::unique_ptr<bz_APIIntList> getStrongestTeamPlayers(bz_eTeamType team, int numberOfPlayers);
+    virtual std::shared_ptr<bz_APIIntList> getStrongestTeamPlayers(bz_eTeamType team, int numberOfPlayers);
 
     bool swapQueue[256], teamsUneven, balanceQueued;
     double timeFirstUneven;
@@ -137,10 +137,10 @@ void teamSwitch::Cleanup ()
     bz_removeCustomSlashCommand("switch");
 }
 
-std::unique_ptr<bz_APIIntList> teamSwitch::getStrongestTeamPlayers(bz_eTeamType team, int numberOfPlayers)
+std::shared_ptr<bz_APIIntList> teamSwitch::getStrongestTeamPlayers(bz_eTeamType team, int numberOfPlayers)
 {
-    std::unique_ptr<bz_APIIntList> playerlist(bztk_getTeamPlayerIndexList(team));
-    std::unique_ptr<bz_APIIntList> resp(bz_newIntList());
+    std::shared_ptr<bz_APIIntList> playerlist(bztk_getTeamPlayerIndexList(team));
+    std::shared_ptr<bz_APIIntList> resp(bz_newIntList());
 
     std::map<int, int> playerKDRatio; // Map to hold the Kill/Death Ratio of each team player. Std maps automatically sort keys, hence using KD ratio as key
 
@@ -232,7 +232,7 @@ bool teamSwitch::balanceTeams (void)
         bz_debugMessagef(3, "DEBUG :: Automatic Team Balance :: Using strength algorithm to balance teams.");
 
         // Sanity check
-        std::unique_ptr<bz_APIIntList> playerlist(getStrongestTeamPlayers(strongTeam, amountOfPlayersToSwitch));
+        std::shared_ptr<bz_APIIntList> playerlist(getStrongestTeamPlayers(strongTeam, amountOfPlayersToSwitch));
 
         for (unsigned int i = 0; i < playerlist->size(); i++)
         {
@@ -357,7 +357,7 @@ void teamSwitch::Event (bz_EventData* eventData)
                 // Check if the teams are unfair
                 if (teamsUnfair(strongTeam, weakTeam))
                 {
-                    std::unique_ptr<bz_BasePlayerRecord> playerData(bz_getPlayerByIndex(playerID));
+                    std::shared_ptr<bz_BasePlayerRecord> playerData(bz_getPlayerByIndex(playerID));
 
                     // If the player capping is part of the strong team so we can switch them
                     if (playerData->team == strongTeam)
@@ -393,7 +393,7 @@ void teamSwitch::Event (bz_EventData* eventData)
                 // Check if the teams are unfair
                 if (teamsUnfair(strongTeam, weakTeam))
                 {
-                    std::unique_ptr<bz_BasePlayerRecord> playerData(bz_getPlayerByIndex(playerID));
+                    std::shared_ptr<bz_BasePlayerRecord> playerData(bz_getPlayerByIndex(playerID));
 
                     // If the player who capped is part of the stronger team
                     if (playerData->team == strongTeam)
@@ -508,7 +508,7 @@ bool teamSwitch::SlashCommand(int playerID, bz_ApiString command, bz_ApiString /
             }
             else
             {
-                std::unique_ptr<bz_BasePlayerRecord> playerData(bztk_getPlayerByCallsign(params->get(0).c_str()));
+                std::shared_ptr<bz_BasePlayerRecord> playerData(bztk_getPlayerByCallsign(params->get(0).c_str()));
                 victimID = (playerData != NULL) ? playerData->playerID : -1;
             }
 
