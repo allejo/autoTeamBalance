@@ -1,6 +1,6 @@
 ### 1.6.2
 
-- `Fixed` Plug-in no longer attempts to balance teams indefinitely due to queued players not having tied yet
+- `Fixed` Plug-in no longer attempts to balance teams indefinitely due to queued players not having died yet
 - `Fixed` Ability to /switch players based on their callsign
 - `Improved` Use of new bzToolkit API functions
 
