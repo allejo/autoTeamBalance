@@ -21,7 +21,7 @@ Compiling
 
 1.  Check out the BZFlag source code.
 
-    `git clone -b v2_4_x https://github.com/BZFlag-Dev/bzflag-import-3.git bzflag`
+    `git clone -b 2.4 https://github.com/BZFlag-Dev/bzflag.git`
 
 2.  Go into the newly checked out source code and then the plugins directory.
 
