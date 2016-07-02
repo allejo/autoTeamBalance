@@ -27,25 +27,17 @@ Compiling
 
     `cd bzflag/plugins`
 
-3.  Create a plugin using the `newplug.sh` script.
-
-    `sh newplug.sh autoTeamBalance`
-
-4.  Delete the newly create autoTeamBalance directory.
-
-    `rm -rf autoTeamBalance`
-
-5.  Run a git clone of this repository from within the plugins directory. This should have created a new autoTeamBalance directory within the plugins directory.
+3.  Run a git clone of this repository from within the plugins directory. This should have created a new autoTeamBalance directory within the plugins directory.
 
     `git clone https://github.com/allejo/autoTeamBalance.git`
 
-6.  Now you will need to checkout the required submodules so the plugin has the proper dependencies so it can compile properly.
+4.  Now you will need to checkout the required submodules so the plugin has the proper dependencies so it can compile properly.
 
     `cd autoTeamBalance; git submodule update --init`
 
-7.  Instruct the build system to generate a Makefile and then compile and install the plugin.
+5.  Instruct the build system to generate a Makefile and then compile and install the plugin.
 
-    `cd ../..; ./autogen.sh; ./configure; make; make install;`
+    `cd ../..; ./autogen.sh; ./configure --enable-custom-plugins=autoTeamBalance; make; make install;`
 
 Server Details
 --------------
@@ -54,7 +46,7 @@ Server Details
 
 To use this plugin after it has been compiled, simply load the plugin via the configuration file.
 
-`-loadplugin /path/to/autoTeamBalance.so`
+`-loadplugin autoTeamBalance`
 
 ### Custom BZDB Variables
 

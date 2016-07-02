@@ -25,13 +25,13 @@ League Overseer
 #include "bzToolkit/bzToolkitAPI.h"
 
 // Define plugin name
-const std::string PLUGIN_NAME = "Automatic Team Balance";
+std::string PLUGIN_NAME = "Automatic Team Balance";
 
 // Define plugin version numbering
-const int MAJOR = 1;
-const int MINOR = 6;
-const int REV = 2;
-const int BUILD = 70;
+int MAJOR = 1;
+int MINOR = 6;
+int REV = 2;
+int BUILD = 70;
 
 class teamSwitch : public bz_Plugin, public bz_CustomSlashCommandHandler
 {
@@ -112,8 +112,8 @@ void teamSwitch::Init (const char* /*commandLine*/)
     }
 
     bz_debugMessagef(2, "DEBUG :: Automatic Team Balance :: Teams detected -> %s vs %s",
-             bztk_eTeamTypeLiteral(TEAM_ONE).c_str(),
-             bztk_eTeamTypeLiteral(TEAM_TWO).c_str());
+             bztk_eTeamTypeLiteral(TEAM_ONE),
+             bztk_eTeamTypeLiteral(TEAM_TWO));
 
     // Register some custom BZDB variables
     bztk_registerCustomStringBZDB("_atbSwapPlayerAlgorithm", "random");
@@ -369,7 +369,7 @@ void teamSwitch::Event (bz_EventData* eventData)
                         resetFlag(0, playerID);
                         resetFlag(1, playerID);
 
-                        bz_sendTextMessagef(BZ_SERVER, playerID, "You were switched to the %s.", bz_tolower(bztk_eTeamTypeLiteral(weakTeam).c_str()));
+                        bz_sendTextMessagef(BZ_SERVER, playerID, "You were switched to the %s.", bz_tolower(bztk_eTeamTypeLiteral(weakTeam)));
                     }
                 }
             }
@@ -399,7 +399,7 @@ void teamSwitch::Event (bz_EventData* eventData)
                         // Kill the player as punishment and swap them to the weak team
                         bz_killPlayer(playerID, false);
 
-                        bz_sendTextMessagef(BZ_SERVER, playerID, "You were automatically switched to the %s team to make the teams fair.", bztk_eTeamTypeLiteral(weakTeam).c_str());
+                        bz_sendTextMessagef(BZ_SERVER, playerID, "You were automatically switched to the %s team to make the teams fair.", bztk_eTeamTypeLiteral(weakTeam));
                     }
                 }
             }
@@ -428,7 +428,7 @@ void teamSwitch::Event (bz_EventData* eventData)
                 if (targetTeamQueue[playerID] != eNoTeam)
                 {
                     bztk_changeTeam(playerID, targetTeamQueue[playerID]);
-                    bz_sendTextMessagef(BZ_SERVER, playerID, "You were automatically switched to the %s team to make the teams fair.", bztk_eTeamTypeLiteral(targetTeamQueue[playerID]).c_str());
+                    bz_sendTextMessagef(BZ_SERVER, playerID, "You were automatically switched to the %s team to make the teams fair.", bztk_eTeamTypeLiteral(targetTeamQueue[playerID]));
                 }
 
                 swapQueue[playerID] = false;
@@ -492,50 +492,48 @@ bool teamSwitch::SlashCommand(int playerID, bz_ApiString command, bz_ApiString /
             return true;
         }
 
-        int victimID;
+        bz_PlayerRecordV2* victim;
         bz_eTeamType targetTeam;
 
         if (params->size() == 2)
         {
-            victimID   = bztk_getIDFromCallsignOrID(params->get(0).c_str());
+            victim     = (bz_PlayerRecordV2*)bz_getPlayerBySlotOrCallsign(params->get(0).c_str());
             targetTeam = bztk_eTeamType(params->get(1).c_str());
         }
         else
         {
-            victimID   = playerID;
+            victim     = (bz_PlayerRecordV2*)bz_getPlayerByIndex(playerID);
             targetTeam = bztk_eTeamType(params->get(0).c_str());
         }
 
-        if (bztk_isValidPlayerID(victimID))
+        if (victim != NULL)
         {
-            bz_PlayerRecordV2* pr = (bz_PlayerRecordV2*)bz_getPlayerByIndex(victimID);
-
-            if (pr->team == eObservers && pr->motto == "bzadmin")
+            if (victim->team == eObservers && victim->motto == "bzadmin")
             {
                 bz_sendTextMessage(BZ_SERVER, playerID, "Warning: In order to prevent bzadmin clients from crashing, you cannot 'switch' bzadmin clients.");
-                bz_freePlayerRecord(pr);
+                bz_freePlayerRecord(victim);
                 return true;
             }
 
-            bz_freePlayerRecord(pr);
-
-            if (bztk_changeTeam(victimID, targetTeam))
+            if (bztk_changeTeam(victim->playerID, targetTeam))
             {
-                if (playerID != victimID)
+                if (playerID != victim->playerID)
                 {
-                    bz_sendTextMessagef(BZ_SERVER, victimID, "You were switched to the %s team by %s.",
-                                    bztk_eTeamTypeLiteral(targetTeam).c_str(),
+                    bz_sendTextMessagef(BZ_SERVER, victim->playerID, "You were switched to the %s team by %s.",
+                                    bztk_eTeamTypeLiteral(targetTeam),
                                     bz_getPlayerByIndex(playerID)->callsign.c_str());
                 }
                 else
                 {
-                    bz_sendTextMessagef(BZ_SERVER, victimID, "You switched to the %s team.", bztk_eTeamTypeLiteral(targetTeam).c_str());
+                    bz_sendTextMessagef(BZ_SERVER, victim->playerID, "You switched to the %s team.", bztk_eTeamTypeLiteral(targetTeam));
                 }
             }
             else
             {
-                bz_sendTextMessagef(BZ_SERVER, playerID, "The %s team does not exist on this server.", bztk_eTeamTypeLiteral(targetTeam).c_str());
+                bz_sendTextMessagef(BZ_SERVER, playerID, "The %s team does not exist on this server.", bztk_eTeamTypeLiteral(targetTeam));
             }
+
+            bz_freePlayerRecord(victim);
         }
         else
         {
